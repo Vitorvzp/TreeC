@@ -1,0 +1,20 @@
+/target/
+Tree.md
+Structure.json
+Structure.txt
+/.obsidian/
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+/tree-mounter/
+Context.md
+Context-pt1.md
+Context-pt2.md
+Prompt.md
+Pendent Project Update.md
+Readme.md
+CHANGELOG.md

@@ -1,0 +1,12 @@
+[package]
+name = "treec-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] } # CLI Arguments
+walkdir = "2.4" # Fast recursive stepping
+regex = "1.10"  # Patterns & TOML manual parsing
+serde = { version = "1.0", features = ["derive"] } # Metadata mapping
+serde_json = "1.0" # JSON Artifact
+chrono = "0.4" # Timestamps
