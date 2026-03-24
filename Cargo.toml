@@ -16,4 +16,5 @@ regex = "1.10"  # Patterns & TOML manual parsing
 serde = { version = "1.0", features = ["derive"] } # Metadata mapping
 serde_json = "1.0" # JSON Artifact
 chrono = "0.4" # Timestamps
+ureq = { version = "2.9", features = ["json"] } # HTTP client for AI API
 

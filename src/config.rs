@@ -19,6 +19,11 @@ pub struct Config {
     pub ignore_folders: Vec<String>,
     pub ignore_extensions: Vec<String>,
     pub ignore_files: Vec<String>,
+
+    // [NeuralLink]
+    pub neural_api_key: Option<String>,
+    pub neural_model: String,
+    pub neural_provider: String,
 }
 
 impl Default for Config {
@@ -34,6 +39,9 @@ impl Default for Config {
             ignore_folders: vec!["target".into(), "node_modules".into(), ".git".into()],
             ignore_extensions: vec![],
             ignore_files: vec![],
+            neural_api_key: None,
+            neural_model: "gemini-2.0-flash".into(),
+            neural_provider: "gemini".into(),
         }
     }
 }
@@ -71,8 +79,77 @@ impl Config {
             parse_string_array(&content, "Extensions").unwrap_or(cfg.ignore_extensions);
         cfg.ignore_files = parse_string_array(&content, "Files").unwrap_or(cfg.ignore_files);
 
+        // --- [NeuralLink] ---
+        cfg.neural_api_key = parse_string(&content, "ApiKey");
+        cfg.neural_model = parse_string(&content, "Model").unwrap_or(cfg.neural_model);
+        cfg.neural_provider = parse_string(&content, "Provider").unwrap_or(cfg.neural_provider);
+
         cfg
     }
+
+    /// Save full neural config (provider, model, API key) to TreeC.toml [NeuralLink].
+    pub fn save_neural_config(
+        root: &std::path::Path,
+        api_key: &str,
+        provider: &str,
+        model: &str,
+    ) -> Result<(), String> {
+        let toml_path = root.join("TreeC.toml");
+        let mut content = fs::read_to_string(&toml_path).unwrap_or_default();
+
+        // Remove existing [NeuralLink] section (line-by-line, no lookahead)
+        content = strip_neural_section(&content);
+
+        // Append clean [NeuralLink] section
+        content.push_str(&format!(
+            "\n[NeuralLink]\nProvider = \"{}\"\nModel = \"{}\"\nApiKey = \"{}\"\n",
+            provider, model, api_key
+        ));
+
+        fs::write(&toml_path, &content)
+            .map_err(|e| format!("Failed to write TreeC.toml: {}", e))
+    }
+
+    /// Remove the [NeuralLink] section from TreeC.toml.
+    pub fn remove_neural_config(root: &std::path::Path) -> Result<(), String> {
+        let toml_path = root.join("TreeC.toml");
+        let content = fs::read_to_string(&toml_path)
+            .map_err(|_| "TreeC.toml not found.".to_string())?;
+
+        let cleaned = strip_neural_section(&content);
+
+        fs::write(&toml_path, &cleaned)
+            .map_err(|e| format!("Failed to write TreeC.toml: {}", e))
+    }
+}
+
+/// Remove the [NeuralLink] section from TOML content using line-by-line parsing.
+fn strip_neural_section(content: &str) -> String {
+    let mut result = String::new();
+    let mut in_neural = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[NeuralLink]" {
+            in_neural = true;
+            continue;
+        }
+        // If we hit another section header, stop skipping
+        if in_neural && trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_neural = false;
+        }
+        if !in_neural {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    // Clean trailing blank lines
+    while result.ends_with("\n\n") {
+        result.pop();
+    }
+
+    result
 }
 
 // ─── Regex Helpers ───────────────────────────────────────────────
@@ -91,6 +168,14 @@ fn parse_bool(content: &str, key: &str) -> Option<bool> {
     let re = Regex::new(&pattern).ok()?;
     re.captures(content)
         .and_then(|cap| Some(cap.get(1)?.as_str() == "true"))
+}
+
+/// Parse a single quoted string value: `Key = "value"`
+fn parse_string(content: &str, key: &str) -> Option<String> {
+    let pattern = format!(r#"(?m)^\s*{}\s*=\s*"([^"]*)""#, regex::escape(key));
+    let re = Regex::new(&pattern).ok()?;
+    re.captures(content)
+        .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
 }
 
 /// Parse a TOML string array: `Key = ["val1", "val2"]`
