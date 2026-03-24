@@ -7,6 +7,7 @@ MaxFileSizeKB = 1024
 UseGitIgnore = true
 DetectLanguage = true
 CountLines = true
+IncludeHiddenDirs = false  # Set to true to include .github, .vscode, etc.
 
 [Exports]
 GenerateMarkdown = true

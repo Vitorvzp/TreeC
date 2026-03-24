@@ -32,10 +32,15 @@ pub fn analyze_file(
 
     let mut reader = BufReader::new(file);
 
-    // ── 1. Null Byte Detection (first 1024 bytes) ──
+    // ── 1. Binary Detection (first 1024 bytes) ──
+    // Uses two heuristics:
+    //   a) Any null byte (0x00) → strong binary indicator
+    //   b) >30% non-printable bytes (excluding common control chars) → binary
+    // This avoids false positives on UTF-16 text and false negatives on
+    // binary files whose first bytes happen to be ASCII.
     let mut header = [0u8; 1024];
     let bytes_read = reader.read(&mut header).unwrap_or(0);
-    let is_binary = header[..bytes_read].iter().any(|&b| b == 0x00);
+    let is_binary = detect_binary(&header[..bytes_read]);
 
     // ── 2. Language Detection ──
     let language = if detect_language {
@@ -63,6 +68,43 @@ pub fn analyze_file(
 /// Read file content as a String. Returns None if binary or unreadable.
 pub fn read_file_content(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
+}
+
+// ─── Binary Detection ────────────────────────────────────────────
+
+/// Determine if a byte slice represents binary content.
+///
+/// A buffer is considered binary if:
+/// - It contains any null byte (0x00), OR
+/// - More than 30% of bytes are non-printable (not tab/LF/CR and not 0x20–0x7E)
+///
+/// This handles UTF-16 files (which have null bytes) correctly, and catches
+/// binary files that start with printable bytes but contain non-text data.
+fn detect_binary(buf: &[u8]) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+
+    let mut null_count: usize = 0;
+    let mut non_printable: usize = 0;
+
+    for &b in buf {
+        if b == 0x00 {
+            null_count += 1;
+        }
+        // Printable ASCII: 0x20–0x7E, plus tab (0x09), LF (0x0A), CR (0x0D)
+        if b != 0x09 && b != 0x0A && b != 0x0D && !(0x20..=0x7E).contains(&b) {
+            non_printable += 1;
+        }
+    }
+
+    // Any null byte → binary
+    if null_count > 0 {
+        return true;
+    }
+
+    // >30% non-printable → binary
+    non_printable * 100 / buf.len() > 30
 }
 
 // ─── Fast Line Counting ─────────────────────────────────────────

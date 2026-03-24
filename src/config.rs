@@ -1,7 +1,7 @@
-use regex::Regex;
+use serde::Deserialize;
 use std::fs;
 
-/// Configuration loaded from TreeC.toml via Regex-based parsing.
+/// Configuration loaded from TreeC.toml via the `toml` crate.
 #[derive(Debug)]
 pub struct Config {
     // [General]
@@ -9,6 +9,7 @@ pub struct Config {
     pub use_gitignore: bool,
     pub detect_language: bool,
     pub count_lines: bool,
+    pub include_hidden_dirs: bool,
 
     // [Exports]
     pub generate_json: bool,
@@ -21,6 +22,7 @@ pub struct Config {
     pub ignore_files: Vec<String>,
 
     // [NeuralLink]
+    /// API key — resolved from env var TREEC_API_KEY first, then TreeC.toml.
     pub neural_api_key: Option<String>,
     pub neural_model: String,
     pub neural_provider: String,
@@ -33,6 +35,7 @@ impl Default for Config {
             use_gitignore: true,
             detect_language: true,
             count_lines: true,
+            include_hidden_dirs: false,
             generate_json: true,
             generate_txt: true,
             generate_markdown: true,
@@ -46,44 +49,127 @@ impl Default for Config {
     }
 }
 
+// ─── TOML Deserialization Structs ────────────────────────────────
+
+#[derive(Deserialize, Default)]
+struct TomlConfig {
+    #[serde(rename = "General")]
+    general: Option<TomlGeneral>,
+    #[serde(rename = "Exports")]
+    exports: Option<TomlExports>,
+    #[serde(rename = "Ignore")]
+    ignore: Option<TomlIgnore>,
+    #[serde(rename = "NeuralLink")]
+    neural_link: Option<TomlNeuralLink>,
+}
+
+#[derive(Deserialize, Default)]
+struct TomlGeneral {
+    #[serde(rename = "MaxFileSizeKB")]
+    max_file_size_kb: Option<u64>,
+    #[serde(rename = "UseGitIgnore")]
+    use_gitignore: Option<bool>,
+    #[serde(rename = "DetectLanguage")]
+    detect_language: Option<bool>,
+    #[serde(rename = "CountLines")]
+    count_lines: Option<bool>,
+    #[serde(rename = "IncludeHiddenDirs")]
+    include_hidden_dirs: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct TomlExports {
+    #[serde(rename = "GenerateMarkdown")]
+    generate_markdown: Option<bool>,
+    #[serde(rename = "GenerateJson")]
+    generate_json: Option<bool>,
+    #[serde(rename = "GenerateTxt")]
+    generate_txt: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct TomlIgnore {
+    #[serde(rename = "Folders")]
+    folders: Option<Vec<String>>,
+    #[serde(rename = "Extensions")]
+    extensions: Option<Vec<String>>,
+    #[serde(rename = "Files")]
+    files: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Default)]
+struct TomlNeuralLink {
+    #[serde(rename = "ApiKey")]
+    api_key: Option<String>,
+    #[serde(rename = "Model")]
+    model: Option<String>,
+    #[serde(rename = "Provider")]
+    provider: Option<String>,
+}
+
+// ─── Config Implementation ───────────────────────────────────────
+
 impl Config {
-    /// Load configuration from TreeC.toml using Regex-based parsing.
+    /// Load configuration from TreeC.toml using the `toml` crate.
     /// Falls back to defaults if the file is missing or unparseable.
+    ///
+    /// API key resolution order:
+    ///   1. `TREEC_API_KEY` environment variable (most secure)
+    ///   2. `ApiKey` field in `[NeuralLink]` section of TreeC.toml
     pub fn load(root: &std::path::Path) -> Self {
         let toml_path = root.join("TreeC.toml");
         let content = match fs::read_to_string(&toml_path) {
             Ok(c) => c,
             Err(_) => {
                 eprintln!("[TreeC] Warning: TreeC.toml not found, using defaults.");
-                return Self::default();
+                return Self::resolve_api_key(Self::default());
             }
         };
 
-        let mut cfg = Self::default();
+        let parsed: TomlConfig = match toml::from_str(&content) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("[TreeC] Warning: Failed to parse TreeC.toml: {}. Using defaults.", e);
+                return Self::resolve_api_key(Self::default());
+            }
+        };
 
-        // --- [General] ---
-        cfg.max_file_size_kb = parse_int(&content, "MaxFileSizeKB").unwrap_or(cfg.max_file_size_kb);
-        cfg.use_gitignore = parse_bool(&content, "UseGitIgnore").unwrap_or(cfg.use_gitignore);
-        cfg.detect_language = parse_bool(&content, "DetectLanguage").unwrap_or(cfg.detect_language);
-        cfg.count_lines = parse_bool(&content, "CountLines").unwrap_or(cfg.count_lines);
+        let defaults = Self::default();
+        let general = parsed.general.unwrap_or_default();
+        let exports = parsed.exports.unwrap_or_default();
+        let ignore = parsed.ignore.unwrap_or_default();
+        let neural = parsed.neural_link.unwrap_or_default();
 
-        // --- [Exports] ---
-        cfg.generate_json = parse_bool(&content, "GenerateJson").unwrap_or(cfg.generate_json);
-        cfg.generate_txt = parse_bool(&content, "GenerateTxt").unwrap_or(cfg.generate_txt);
-        cfg.generate_markdown =
-            parse_bool(&content, "GenerateMarkdown").unwrap_or(cfg.generate_markdown);
+        let cfg = Self {
+            max_file_size_kb: general.max_file_size_kb.unwrap_or(defaults.max_file_size_kb),
+            use_gitignore: general.use_gitignore.unwrap_or(defaults.use_gitignore),
+            detect_language: general.detect_language.unwrap_or(defaults.detect_language),
+            count_lines: general.count_lines.unwrap_or(defaults.count_lines),
+            include_hidden_dirs: general.include_hidden_dirs.unwrap_or(defaults.include_hidden_dirs),
 
-        // --- [Ignore] ---
-        cfg.ignore_folders = parse_string_array(&content, "Folders").unwrap_or(cfg.ignore_folders);
-        cfg.ignore_extensions =
-            parse_string_array(&content, "Extensions").unwrap_or(cfg.ignore_extensions);
-        cfg.ignore_files = parse_string_array(&content, "Files").unwrap_or(cfg.ignore_files);
+            generate_markdown: exports.generate_markdown.unwrap_or(defaults.generate_markdown),
+            generate_json: exports.generate_json.unwrap_or(defaults.generate_json),
+            generate_txt: exports.generate_txt.unwrap_or(defaults.generate_txt),
 
-        // --- [NeuralLink] ---
-        cfg.neural_api_key = parse_string(&content, "ApiKey");
-        cfg.neural_model = parse_string(&content, "Model").unwrap_or(cfg.neural_model);
-        cfg.neural_provider = parse_string(&content, "Provider").unwrap_or(cfg.neural_provider);
+            ignore_folders: ignore.folders.unwrap_or(defaults.ignore_folders),
+            ignore_extensions: ignore.extensions.unwrap_or(defaults.ignore_extensions),
+            ignore_files: ignore.files.unwrap_or(defaults.ignore_files),
 
+            neural_api_key: neural.api_key.filter(|k| !k.is_empty()),
+            neural_model: neural.model.unwrap_or(defaults.neural_model),
+            neural_provider: neural.provider.unwrap_or(defaults.neural_provider),
+        };
+
+        Self::resolve_api_key(cfg)
+    }
+
+    /// Resolve API key: env var TREEC_API_KEY overrides the value in TreeC.toml.
+    fn resolve_api_key(mut cfg: Self) -> Self {
+        if let Ok(env_key) = std::env::var("TREEC_API_KEY") {
+            if !env_key.is_empty() {
+                cfg.neural_api_key = Some(env_key);
+            }
+        }
         cfg
     }
 
@@ -97,7 +183,7 @@ impl Config {
         let toml_path = root.join("TreeC.toml");
         let mut content = fs::read_to_string(&toml_path).unwrap_or_default();
 
-        // Remove existing [NeuralLink] section (line-by-line, no lookahead)
+        // Remove existing [NeuralLink] section
         content = strip_neural_section(&content);
 
         // Append clean [NeuralLink] section
@@ -150,50 +236,4 @@ fn strip_neural_section(content: &str) -> String {
     }
 
     result
-}
-
-// ─── Regex Helpers ───────────────────────────────────────────────
-
-/// Parse an integer value: `Key = 1024`
-fn parse_int(content: &str, key: &str) -> Option<u64> {
-    let pattern = format!(r"(?m)^\s*{}\s*=\s*(\d+)", regex::escape(key));
-    let re = Regex::new(&pattern).ok()?;
-    re.captures(content)
-        .and_then(|cap| cap.get(1)?.as_str().parse().ok())
-}
-
-/// Parse a boolean value: `Key = true` / `Key = false`
-fn parse_bool(content: &str, key: &str) -> Option<bool> {
-    let pattern = format!(r"(?m)^\s*{}\s*=\s*(true|false)", regex::escape(key));
-    let re = Regex::new(&pattern).ok()?;
-    re.captures(content)
-        .and_then(|cap| Some(cap.get(1)?.as_str() == "true"))
-}
-
-/// Parse a single quoted string value: `Key = "value"`
-fn parse_string(content: &str, key: &str) -> Option<String> {
-    let pattern = format!(r#"(?m)^\s*{}\s*=\s*"([^"]*)""#, regex::escape(key));
-    let re = Regex::new(&pattern).ok()?;
-    re.captures(content)
-        .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
-}
-
-/// Parse a TOML string array: `Key = ["val1", "val2"]`
-fn parse_string_array(content: &str, key: &str) -> Option<Vec<String>> {
-    let pattern = format!(r"(?m)^\s*{}\s*=\s*\[([^\]]*)\]", regex::escape(key));
-    let re = Regex::new(&pattern).ok()?;
-    let caps = re.captures(content)?;
-    let inner = caps.get(1)?.as_str();
-
-    let item_re = Regex::new(r#""([^"]+)""#).ok()?;
-    let items: Vec<String> = item_re
-        .captures_iter(inner)
-        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-        .collect();
-
-    if items.is_empty() {
-        None
-    } else {
-        Some(items)
-    }
 }

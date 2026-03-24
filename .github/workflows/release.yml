@@ -1,0 +1,139 @@
+name: Release
+
+# Triggered when a semver tag is pushed (e.g. v0.4.0)
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: treec.exe
+            asset_name: treec-windows-x64.exe
+
+          # Linux x64 (musl = fully static binary)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact: treec
+            asset_name: treec-linux-x64
+
+          # macOS ARM (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: treec
+            asset_name: treec-macos-arm64
+
+          # macOS Intel
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: treec
+            asset_name: treec-macos-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # musl-tools required for Linux static binary
+      - name: Install musl-tools (Linux only)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} ${{ matrix.asset_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Extract tag version
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          # Extract the section for this version from CHANGELOG.md
+          VERSION="${{ steps.tag.outputs.version }}"
+          VERSION_NO_V="${VERSION#v}"
+          NOTES=$(awk "/## \[${VERSION_NO_V}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: "🌲 TreeC ${{ steps.tag.outputs.version }}"
+          body: |
+            ## TreeC ${{ steps.tag.outputs.version }}
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+
+            ## 📥 Downloads
+
+            | Platform | File |
+            |---|---|
+            | Windows x64 | `treec-windows-x64.exe` |
+            | Linux x64 (static) | `treec-linux-x64` |
+            | macOS Apple Silicon | `treec-macos-arm64` |
+            | macOS Intel | `treec-macos-x64` |
+
+            ## 🚀 Quick Start
+
+            ```bash
+            # Windows — add to PATH
+            treec --config
+            treec --config-neural gemini YOUR_KEY
+            treec --neural-link
+
+            # Linux/macOS
+            chmod +x treec-linux-x64
+            ./treec-linux-x64 --neural-link
+            ```
+
+            **Full Changelog:** https://github.com/Vitorvzp/TreeC/blob/main/CHANGELOG.md
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: false

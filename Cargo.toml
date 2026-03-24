@@ -1,20 +1,25 @@
 [package]
 name = "treec-rust"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
-description = "High-performance repository documentation & structure export tool"
+description = "High-performance repository documentation, structure export & AI Neural Brain tool"
 repository = "https://github.com/Vitorvzp/TreeC"
+license = "MIT"
+keywords = ["cli", "documentation", "ai", "obsidian", "neural"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
 
 [[bin]]
 name = "treec"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] } # CLI Arguments
-walkdir = "2.4" # Fast recursive stepping
-regex = "1.10"  # Patterns & TOML manual parsing
-serde = { version = "1.0", features = ["derive"] } # Metadata mapping
-serde_json = "1.0" # JSON Artifact
-chrono = "0.4" # Timestamps
-ureq = { version = "2.9", features = ["json"] } # HTTP client for AI API
-
+clap = { version = "4.4", features = ["derive"] }   # CLI Arguments
+ignore = "0.4"                                       # Directory walker with full .gitignore support
+rayon = "1.10"                                       # Parallel file analysis
+toml = { version = "0.8", features = ["parse"] }    # TOML config parsing
+serde = { version = "1.0", features = ["derive"] }  # Metadata mapping
+serde_json = "1.0"                                   # JSON Artifact
+chrono = "0.4"                                       # Timestamps
+ureq = { version = "2.9", features = ["json"] }     # HTTP client for AI API
+indicatif = "0.17"                                   # Progress bars and spinners
