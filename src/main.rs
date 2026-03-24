@@ -82,7 +82,10 @@ fn main() {
     let cli = Cli::parse();
 
     let root = std::fs::canonicalize(&cli.path).unwrap_or_else(|_| {
-        eprintln!("[TreeC] Error: Cannot resolve path '{}'", cli.path.display());
+        eprintln!(
+            "[TreeC] Error: Cannot resolve path '{}'",
+            cli.path.display()
+        );
         std::process::exit(1);
     });
 
@@ -167,9 +170,14 @@ fn main() {
     // ── Update Brain ──
     if cli.update_brain {
         handle_update_brain(
-            &root, &md_content, &config,
-            text_files, total_folders, total_loc,
-            &brain_files, &start,
+            &root,
+            &md_content,
+            &config,
+            text_files,
+            total_folders,
+            total_loc,
+            &brain_files,
+            &start,
         );
     }
 
@@ -265,14 +273,16 @@ fn run_scan_pipeline(
     // Write artifacts
     let mut artifacts: Vec<&str> = Vec::new();
 
-    if config.generate_markdown {
-        if std::fs::write(root.join("Tree.md"), &md_content).is_ok() {
-            artifacts.push("Tree.md");
-        }
+    if config.generate_markdown && std::fs::write(root.join("Tree.md"), &md_content).is_ok() {
+        artifacts.push("Tree.md");
     }
     if config.generate_json {
         let json = generator::generate_json(
-            project_name, &file_metas, text_files, total_folders, total_loc,
+            project_name,
+            &file_metas,
+            text_files,
+            total_folders,
+            total_loc,
         );
         if std::fs::write(root.join("Structure.json"), &json).is_ok() {
             artifacts.push("Structure.json");
@@ -344,10 +354,10 @@ fn handle_config_neural(root: &std::path::Path, provider: &str, api_key: &str) {
     let provider_lower = provider.to_lowercase();
 
     let (valid_provider, default_model) = match provider_lower.as_str() {
-        "gemini" | "google"       => ("gemini", "gemini-2.0-flash"),
-        "openai" | "gpt"          => ("openai", "gpt-4.1-mini"),
-        "claude" | "anthropic"    => ("claude", "claude-sonnet-4-20250514"),
-        "ollama" | "local"        => ("ollama", "llama3.2"),
+        "gemini" | "google" => ("gemini", "gemini-2.0-flash"),
+        "openai" | "gpt" => ("openai", "gpt-4.1-mini"),
+        "claude" | "anthropic" => ("claude", "claude-sonnet-4-20250514"),
+        "ollama" | "local" => ("ollama", "llama3.2"),
         _ => {
             eprintln!("[TreeC] Error: Unknown provider '{}'", provider);
             eprintln!("   Supported: gemini, openai, claude, ollama");
@@ -365,7 +375,11 @@ fn handle_config_neural(root: &std::path::Path, provider: &str, api_key: &str) {
     }
 
     // For ollama, use "local" as a placeholder key (ignored at runtime)
-    let effective_key = if valid_provider == "ollama" { "local" } else { api_key };
+    let effective_key = if valid_provider == "ollama" {
+        "local"
+    } else {
+        api_key
+    };
 
     match config::Config::save_neural_config(root, effective_key, valid_provider, default_model) {
         Ok(_) => {
@@ -375,7 +389,9 @@ fn handle_config_neural(root: &std::path::Path, provider: &str, api_key: &str) {
             // Security: protect TreeC.toml in .gitignore (skip for ollama, no secret stored)
             if valid_provider != "ollama" {
                 if !is_in_gitignore(root, "TreeC.toml") {
-                    println!("\n   ⚠️  Security: TreeC.toml not in .gitignore — adding automatically...");
+                    println!(
+                        "\n   ⚠️  Security: TreeC.toml not in .gitignore — adding automatically..."
+                    );
                     match add_to_gitignore(root, "TreeC.toml") {
                         Ok(_) => println!("      ✅ TreeC.toml added to .gitignore"),
                         Err(e) => eprintln!("      ⚠️  Could not update .gitignore: {}", e),
@@ -404,7 +420,10 @@ fn handle_neural_link(
     start: &Instant,
 ) {
     println!("\n🧠 Neural Link activated!");
-    println!("   Provider: {} | Model: {}", config.neural_provider, config.neural_model);
+    println!(
+        "   Provider: {} | Model: {}",
+        config.neural_provider, config.neural_model
+    );
 
     // Ollama doesn't need an API key
     let api_key = if config.neural_provider == "ollama" {
@@ -424,8 +443,11 @@ fn handle_neural_link(
     warn_token_estimate(md_content, &config.neural_model);
 
     match neural::execute_neural_link(
-        root, md_content, &api_key,
-        &config.neural_model, &config.neural_provider,
+        root,
+        md_content,
+        &api_key,
+        &config.neural_model,
+        &config.neural_provider,
         brain_files,
     ) {
         Ok(_) => {
@@ -441,6 +463,7 @@ fn handle_neural_link(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_update_brain(
     root: &std::path::Path,
     md_content: &str,
@@ -494,7 +517,11 @@ fn handle_update_brain(
 
     // AI refresh if key available
     let has_key = config.neural_provider == "ollama"
-        || config.neural_api_key.as_deref().map(|k| !k.is_empty()).unwrap_or(false);
+        || config
+            .neural_api_key
+            .as_deref()
+            .map(|k| !k.is_empty())
+            .unwrap_or(false);
 
     if has_key {
         warn_token_estimate(md_content, &config.neural_model);
@@ -505,8 +532,11 @@ fn handle_update_brain(
         };
         println!("   🔗 Sending updated project to AI...");
         match neural::execute_neural_link(
-            root, md_content, &key,
-            &config.neural_model, &config.neural_provider,
+            root,
+            md_content,
+            &key,
+            &config.neural_model,
+            &config.neural_provider,
             brain_files,
         ) {
             Ok(_) => println!("   ✅ Brain files regenerated"),
@@ -536,15 +566,20 @@ fn handle_obsidian(root: &std::path::Path) {
         std::process::exit(1);
     }
 
-    let _ = std::fs::write(obsidian_dir.join("app.json"), r#"{
+    let _ = std::fs::write(
+        obsidian_dir.join("app.json"),
+        r#"{
   "showLineNumber": true,
   "strictLineBreaks": false,
   "livePreview": true,
   "defaultViewMode": "preview",
   "readableLineLength": true
-}"#);
+}"#,
+    );
 
-    let _ = std::fs::write(obsidian_dir.join("graph.json"), r#"{
+    let _ = std::fs::write(
+        obsidian_dir.join("graph.json"),
+        r#"{
   "collapse-filter": false,
   "search": "",
   "showTags": false,
@@ -566,9 +601,12 @@ fn handle_obsidian(root: &std::path::Path) {
   "repelStrength": 10,
   "linkStrength": 1,
   "linkDistance": 250
-}"#);
+}"#,
+    );
 
-    let _ = std::fs::write(obsidian_dir.join("workspace.json"), r#"{
+    let _ = std::fs::write(
+        obsidian_dir.join("workspace.json"),
+        r#"{
   "main": {
     "id": "main",
     "type": "split",
@@ -584,7 +622,8 @@ fn handle_obsidian(root: &std::path::Path) {
     ],
     "direction": "vertical"
   }
-}"#);
+}"#,
+    );
 
     println!("✅ Obsidian vault configured in .brain/");
     println!("   📂 Open '{}' as an Obsidian vault", brain_dir.display());
@@ -653,7 +692,11 @@ fn handle_status(root: &std::path::Path, config: &config::Config) {
     } else {
         match &config.neural_api_key {
             Some(_) => {
-                let source = if env_key_set { "TREEC_API_KEY env var" } else { "TreeC.toml" };
+                let source = if env_key_set {
+                    "TREEC_API_KEY env var"
+                } else {
+                    "TreeC.toml"
+                };
                 println!("      API Key  : ✅ configured  (source: {})", source);
             }
             None => {
@@ -701,7 +744,10 @@ fn add_to_gitignore(root: &std::path::Path, entry: &str) -> Result<(), String> {
     if !content.is_empty() && !content.ends_with('\n') {
         content.push('\n');
     }
-    content.push_str(&format!("\n# TreeC — API key config (contains secrets)\n{}\n", entry));
+    content.push_str(&format!(
+        "\n# TreeC — API key config (contains secrets)\n{}\n",
+        entry
+    ));
     std::fs::write(&path, &content).map_err(|e| format!("Cannot write .gitignore: {}", e))
 }
 
@@ -733,7 +779,9 @@ fn warn_token_estimate(content: &str, model: &str) {
         eprintln!("        • Reduce MaxFileSizeKB in TreeC.toml");
         eprintln!("        • Add more folders/extensions to [Ignore]");
         eprintln!("        • Use --brain-files to regenerate only specific sections");
-        eprintln!("        • Switch to a model with a larger context window (e.g. gemini-2.0-flash)");
+        eprintln!(
+            "        • Switch to a model with a larger context window (e.g. gemini-2.0-flash)"
+        );
         std::process::exit(1);
     } else if usage_pct >= 70 {
         println!(
@@ -747,16 +795,16 @@ fn warn_token_estimate(content: &str, model: &str) {
 /// Approximate cost in USD for input tokens (prices per 1M tokens, 2026).
 fn estimate_cost_usd(tokens: usize, model: &str) -> f64 {
     let price_per_1m: f64 = match model {
-        m if m.contains("gemini-2.0-flash")   => 0.10,
-        m if m.contains("gemini-1.5-flash")   => 0.075,
-        m if m.contains("gemini-1.5-pro")     => 1.25,
-        m if m.contains("gpt-4.1-mini")       => 0.40,
-        m if m.contains("gpt-4.1")            => 2.00,
-        m if m.contains("gpt-4o-mini")        => 0.15,
-        m if m.contains("gpt-4o")             => 2.50,
-        m if m.contains("claude-haiku")       => 0.80,
-        m if m.contains("claude-sonnet")      => 3.00,
-        m if m.contains("claude-opus")        => 15.00,
+        m if m.contains("gemini-2.0-flash") => 0.10,
+        m if m.contains("gemini-1.5-flash") => 0.075,
+        m if m.contains("gemini-1.5-pro") => 1.25,
+        m if m.contains("gpt-4.1-mini") => 0.40,
+        m if m.contains("gpt-4.1") => 2.00,
+        m if m.contains("gpt-4o-mini") => 0.15,
+        m if m.contains("gpt-4o") => 2.50,
+        m if m.contains("claude-haiku") => 0.80,
+        m if m.contains("claude-sonnet") => 3.00,
+        m if m.contains("claude-opus") => 15.00,
         m if m.contains("ollama") || m.contains("llama") || m.contains("mistral") => 0.0,
         _ => 1.00,
     };
@@ -768,12 +816,12 @@ fn model_context_window(model: &str) -> usize {
     match model {
         m if m.starts_with("gemini-2.0") => 1_000_000,
         m if m.starts_with("gemini-1.5") => 1_000_000,
-        m if m.starts_with("gemini")     => 32_768,
-        m if m.starts_with("gpt-4.1")   => 128_000,
-        m if m.starts_with("gpt-4o")    => 128_000,
-        m if m.starts_with("gpt-4")     => 128_000,
-        m if m.starts_with("gpt-3.5")   => 16_385,
-        m if m.starts_with("claude")    => 200_000,
+        m if m.starts_with("gemini") => 32_768,
+        m if m.starts_with("gpt-4.1") => 128_000,
+        m if m.starts_with("gpt-4o") => 128_000,
+        m if m.starts_with("gpt-4") => 128_000,
+        m if m.starts_with("gpt-3.5") => 16_385,
+        m if m.starts_with("claude") => 200_000,
         _ => 32_768, // conservative default
     }
 }

@@ -82,7 +82,10 @@ pub fn generate_markdown(
         ));
 
         // Read file content
-        let file_path = root.join(&meta.relative_path.replace('/', std::path::MAIN_SEPARATOR_STR));
+        let file_path = root.join(
+            meta.relative_path
+                .replace('/', std::path::MAIN_SEPARATOR_STR),
+        );
         if let Some(content) = analyzer::read_file_content(&file_path) {
             md.push_str(&format!("```{}\n", meta.language));
             md.push_str(&content);
@@ -164,11 +167,7 @@ impl TreeNode {
 }
 
 /// Build the ASCII tree string from scan entries.
-pub fn build_tree_string(
-    project_name: &str,
-    files: &[ScanEntry],
-    dirs: &[ScanEntry],
-) -> String {
+pub fn build_tree_string(project_name: &str, files: &[ScanEntry], dirs: &[ScanEntry]) -> String {
     // Build tree structure
     let mut root = TreeNode::new(project_name, true);
 
@@ -220,16 +219,8 @@ fn insert_path(root: &mut TreeNode, relative_path: &str, is_dir: bool) {
 
 /// Get children sorted: directories first (alphabetical), then files (alphabetical).
 fn sorted_children(node: &TreeNode) -> Vec<&TreeNode> {
-    let mut dirs: Vec<&TreeNode> = node
-        .children
-        .values()
-        .filter(|n| n.is_dir)
-        .collect();
-    let mut files: Vec<&TreeNode> = node
-        .children
-        .values()
-        .filter(|n| !n.is_dir)
-        .collect();
+    let mut dirs: Vec<&TreeNode> = node.children.values().filter(|n| n.is_dir).collect();
+    let mut files: Vec<&TreeNode> = node.children.values().filter(|n| !n.is_dir).collect();
 
     dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));

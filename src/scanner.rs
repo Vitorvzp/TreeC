@@ -19,6 +19,7 @@ const AUTO_EXCLUDED: &[&str] = &[
 pub struct ScanEntry {
     pub path: PathBuf,
     pub relative_path: String,
+    #[allow(dead_code)]
     pub is_dir: bool,
     pub size_bytes: u64,
 }

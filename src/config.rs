@@ -129,7 +129,10 @@ impl Config {
         let parsed: TomlConfig = match toml::from_str(&content) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("[TreeC] Warning: Failed to parse TreeC.toml: {}. Using defaults.", e);
+                eprintln!(
+                    "[TreeC] Warning: Failed to parse TreeC.toml: {}. Using defaults.",
+                    e
+                );
                 return Self::resolve_api_key(Self::default());
             }
         };
@@ -141,13 +144,19 @@ impl Config {
         let neural = parsed.neural_link.unwrap_or_default();
 
         let cfg = Self {
-            max_file_size_kb: general.max_file_size_kb.unwrap_or(defaults.max_file_size_kb),
+            max_file_size_kb: general
+                .max_file_size_kb
+                .unwrap_or(defaults.max_file_size_kb),
             use_gitignore: general.use_gitignore.unwrap_or(defaults.use_gitignore),
             detect_language: general.detect_language.unwrap_or(defaults.detect_language),
             count_lines: general.count_lines.unwrap_or(defaults.count_lines),
-            include_hidden_dirs: general.include_hidden_dirs.unwrap_or(defaults.include_hidden_dirs),
+            include_hidden_dirs: general
+                .include_hidden_dirs
+                .unwrap_or(defaults.include_hidden_dirs),
 
-            generate_markdown: exports.generate_markdown.unwrap_or(defaults.generate_markdown),
+            generate_markdown: exports
+                .generate_markdown
+                .unwrap_or(defaults.generate_markdown),
             generate_json: exports.generate_json.unwrap_or(defaults.generate_json),
             generate_txt: exports.generate_txt.unwrap_or(defaults.generate_txt),
 
@@ -192,20 +201,18 @@ impl Config {
             provider, model, api_key
         ));
 
-        fs::write(&toml_path, &content)
-            .map_err(|e| format!("Failed to write TreeC.toml: {}", e))
+        fs::write(&toml_path, &content).map_err(|e| format!("Failed to write TreeC.toml: {}", e))
     }
 
     /// Remove the [NeuralLink] section from TreeC.toml.
     pub fn remove_neural_config(root: &std::path::Path) -> Result<(), String> {
         let toml_path = root.join("TreeC.toml");
-        let content = fs::read_to_string(&toml_path)
-            .map_err(|_| "TreeC.toml not found.".to_string())?;
+        let content =
+            fs::read_to_string(&toml_path).map_err(|_| "TreeC.toml not found.".to_string())?;
 
         let cleaned = strip_neural_section(&content);
 
-        fs::write(&toml_path, &cleaned)
-            .map_err(|e| format!("Failed to write TreeC.toml: {}", e))
+        fs::write(&toml_path, &cleaned).map_err(|e| format!("Failed to write TreeC.toml: {}", e))
     }
 }
 

@@ -91,7 +91,12 @@ pub fn execute_neural_link(
         "openai" | "gpt" => call_openai_api(&system_prompt, &user_content, api_key, model)?,
         "claude" | "anthropic" => call_claude_api(&system_prompt, &user_content, api_key, model)?,
         "ollama" => call_ollama_api(&system_prompt, &user_content, model)?,
-        _ => return Err(format!("Unknown provider: {}. Supported: gemini, openai, claude, ollama", provider)),
+        _ => {
+            return Err(format!(
+                "Unknown provider: {}. Supported: gemini, openai, claude, ollama",
+                provider
+            ))
+        }
     };
 
     println!("   📝 Writing brain files...");
@@ -396,35 +401,37 @@ fn write_brain_output(
     target_files: &[String],
 ) -> Result<(), String> {
     let all_files: Vec<(&str, &Option<String>)> = vec![
-        ("context",      &output.context),
+        ("context", &output.context),
         ("architecture", &output.architecture),
-        ("readme",       &output.readme),
-        ("roadmap",      &output.roadmap),
-        ("decisions",    &output.decisions),
-        ("tasks",        &output.tasks),
-        ("modules",      &output.modules),
-        ("functions",    &output.functions),
-        ("api",          &output.api),
-        ("database",     &output.database),
-        ("models",       &output.models),
-        ("services",     &output.services),
+        ("readme", &output.readme),
+        ("roadmap", &output.roadmap),
+        ("decisions", &output.decisions),
+        ("tasks", &output.tasks),
+        ("modules", &output.modules),
+        ("functions", &output.functions),
+        ("api", &output.api),
+        ("database", &output.database),
+        ("models", &output.models),
+        ("services", &output.services),
     ];
 
     // Map key name → actual filename in .brain/
     let filename_map: std::collections::HashMap<&str, &str> = [
-        ("context",      "context.md"),
+        ("context", "context.md"),
         ("architecture", "architecture.md"),
-        ("readme",       "readme.md"),
-        ("roadmap",      "roadmap.md"),
-        ("decisions",    "decisions.md"),
-        ("tasks",        "tasks.md"),
-        ("modules",      "knowledge/modules.md"),
-        ("functions",    "knowledge/functions.md"),
-        ("api",          "knowledge/api.md"),
-        ("database",     "knowledge/database.md"),
-        ("models",       "knowledge/models.md"),
-        ("services",     "knowledge/services.md"),
-    ].into_iter().collect();
+        ("readme", "readme.md"),
+        ("roadmap", "roadmap.md"),
+        ("decisions", "decisions.md"),
+        ("tasks", "tasks.md"),
+        ("modules", "knowledge/modules.md"),
+        ("functions", "knowledge/functions.md"),
+        ("api", "knowledge/api.md"),
+        ("database", "knowledge/database.md"),
+        ("models", "knowledge/models.md"),
+        ("services", "knowledge/services.md"),
+    ]
+    .into_iter()
+    .collect();
 
     let mut written = 0;
     for (key, content) in &all_files {
@@ -486,7 +493,13 @@ Rules:
 fn build_system_prompt_selective(target_files: &[String]) -> String {
     let keys_json: Vec<String> = target_files
         .iter()
-        .map(|k| format!("  \"{}\": \"# {}\\n\\n(Comprehensive Markdown documentation for this section)\"", k, capitalize(k)))
+        .map(|k| {
+            format!(
+                "  \"{}\": \"# {}\\n\\n(Comprehensive Markdown documentation for this section)\"",
+                k,
+                capitalize(k)
+            )
+        })
         .collect();
 
     format!(
