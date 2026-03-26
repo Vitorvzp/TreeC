@@ -27,11 +27,13 @@ memory.md
 .claude-docs
 workflow-prompt.md
 .claude-docs/*
-changelog.md*
-CHANGELO.md*
+# lowercase/local changelog variants — CHANGELOG.md (uppercase) is tracked
+changelog.md
+changelogs.md
 roadmap.md
 *errors*
 *logs*
-
+.brain/*
+.brain
 # TreeC — API key config (contains secrets)
 TreeC.toml
