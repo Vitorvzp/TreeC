@@ -1,6 +1,6 @@
 [package]
 name = "treec-rust"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "High-performance repository documentation, structure export & AI Neural Brain tool"
 repository = "https://github.com/Vitorvzp/TreeC"
@@ -23,3 +23,5 @@ serde_json = "1.0"                                   # JSON Artifact
 chrono = "0.4"                                       # Timestamps
 ureq = { version = "2.9", features = ["json"] }     # HTTP client for AI API
 indicatif = "0.17"                                   # Progress bars and spinners
+keyring = "3.6.3"
+content_inspector = "0.2.4"

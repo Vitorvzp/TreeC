@@ -18,3 +18,8 @@ GenerateTxt = true
 Folders = ["target", "node_modules", ".git", "dist", "build", ".obsidian"]
 Extensions = [".exe", ".dll", ".so", ".dylib", ".o", ".obj", ".bin", ".img", ".iso", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".mp3", ".mp4", ".avi", ".mov", ".zip", ".tar", ".gz", ".rar", ".7z", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".woff", ".woff2", ".ttf", ".eot"]
 Files = []
+
+[NeuralLink]
+Provider = "gemini"
+Model = "gemini-2.0-flash"
+ApiKey = "dummy_key"

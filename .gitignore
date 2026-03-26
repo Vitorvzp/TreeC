@@ -23,3 +23,15 @@ brain
 memory.md
 .claude/*
 .claude
+.claude-docs/*
+.claude-docs
+workflow-prompt.md
+.claude-docs/*
+changelog.md*
+CHANGELO.md*
+roadmap.md
+*errors*
+*logs*
+
+# TreeC — API key config (contains secrets)
+TreeC.toml

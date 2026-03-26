@@ -21,6 +21,7 @@ use std::time::Instant;
 Commands:\n  \
 treec                          Scan project and generate Tree.md\n  \
 treec --neural-link            Create AI Second Brain (.brain/)\n  \
+treec --neural-link --dry-run  Preview prompt without calling AI\n  \
 treec --update-brain           Update existing brain with latest scan\n  \
 treec --config-neural <KEY>    Configure AI API key\n  \
 treec --config                 Create default TreeC.toml config\n  \
@@ -71,10 +72,16 @@ struct Cli {
     /// 🎯 Selectively regenerate specific brain files (comma-separated keys)
     /// Used with --neural-link or --update-brain
     /// Example: treec --neural-link --brain-files context,architecture,tasks
-    /// Available keys: context, architecture, readme, roadmap, decisions, tasks,
-    ///                 modules, functions, api, database, models, services
+    /// Available keys: context, architecture, decisions, roadmap, patterns, releases,
+    ///                 modules, functions, api, database, models, services,
+    ///                 readme, documentation, tasks, backlog, bugs, project, goals
     #[arg(long = "brain-files", value_name = "FILES")]
     brain_files: Option<String>,
+
+    /// 🔍 Dry-run: show what would be sent to the AI without calling the API
+    /// Use with --neural-link or --update-brain
+    #[arg(long = "dry-run")]
+    dry_run: bool,
 }
 
 fn main() {
@@ -162,9 +169,28 @@ fn main() {
     let (md_content, text_files, total_folders, total_loc) =
         run_scan_pipeline(&root, &project_name, &config);
 
+    // ── Dependency Analysis ──
+    let deps = analyzer::detect_dependencies(&root);
+    if !deps.is_empty() {
+        let deps_md = analyzer::format_dependencies_md(&deps, &project_name);
+        println!("   📦 {} dependencies detected", deps.len());
+        // Write to perception/dependencies.md if brain exists
+        let brain_dir = root.join(".brain");
+        if brain_dir.exists() {
+            let _ = brain::update_dependencies(&root, &deps_md);
+        }
+    }
+
     // ── Neural Link ──
     if cli.neural_link {
-        handle_neural_link(&root, &md_content, &config, &brain_files, &start);
+        handle_neural_link(
+            &root,
+            &md_content,
+            &config,
+            &brain_files,
+            &start,
+            cli.dry_run,
+        );
     }
 
     // ── Update Brain ──
@@ -178,6 +204,7 @@ fn main() {
             total_loc,
             &brain_files,
             &start,
+            cli.dry_run,
         );
     }
 
@@ -418,12 +445,27 @@ fn handle_neural_link(
     config: &config::Config,
     brain_files: &[String],
     start: &Instant,
+    dry_run: bool,
 ) {
     println!("\n🧠 Neural Link activated!");
     println!(
         "   Provider: {} | Model: {}",
         config.neural_provider, config.neural_model
     );
+
+    warn_token_estimate(md_content, &config.neural_model);
+
+    if dry_run {
+        println!("\n🔍 Dry-run mode — no API call will be made.");
+        println!("   The prompt above shows what would be sent to the AI.");
+        if !brain_files.is_empty() {
+            println!("   Selective files: {:?}", brain_files);
+        } else {
+            println!("   All brain files would be generated.");
+        }
+        println!("   Run without --dry-run to execute.");
+        return;
+    }
 
     // Ollama doesn't need an API key
     let api_key = if config.neural_provider == "ollama" {
@@ -439,8 +481,6 @@ fn handle_neural_link(
             }
         }
     };
-
-    warn_token_estimate(md_content, &config.neural_model);
 
     match neural::execute_neural_link(
         root,
@@ -473,6 +513,7 @@ fn handle_update_brain(
     total_loc: usize,
     brain_files: &[String],
     start: &Instant,
+    dry_run: bool,
 ) {
     let brain_dir = root.join(".brain");
     if !brain_dir.exists() {
@@ -482,37 +523,43 @@ fn handle_update_brain(
 
     println!("\n🔄 Updating brain...");
 
+    // Update perception/tree.md
     if let Err(e) = brain::update_tree(root, md_content) {
-        eprintln!("[TreeC] Error updating tree.md: {}", e);
+        eprintln!("[TreeC] Error updating perception/tree.md: {}", e);
     } else {
-        println!("   📝 tree.md updated");
+        println!("   📝 perception/tree.md updated");
     }
 
-    // Append to memory.md
+    // Append to memory/long_term.md
     let memory_entry = format!(
-        "\n## Memory Entry - {}\n- Project rescanned\n- Files: {}, Folders: {}, LOC: {}\n- Brain updated with latest structure\n",
+        "\n## Entry — {}\n- Project rescanned: {} files, {} folders, {} LOC\n- Brain updated with latest structure\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M"),
-        text_files, total_folders, total_loc
+        text_files,
+        total_folders,
+        total_loc
     );
-    let memory_path = brain_dir.join("memory.md");
-    if let Ok(mut existing) = std::fs::read_to_string(&memory_path) {
-        existing.push_str(&memory_entry);
-        if std::fs::write(&memory_path, &existing).is_ok() {
-            println!("   📝 memory.md updated");
-        }
+    if let Err(e) = brain::append_memory(root, &memory_entry) {
+        eprintln!("[TreeC] Warning: {}", e);
+    } else {
+        println!("   📝 memory/long_term.md updated");
     }
 
-    // Append to changelog.md
+    // Append to memory/changelog.md
     let changelog_entry = format!(
-        "\n## Change - {}\n- File modified: .brain/tree.md, .brain/memory.md\n- Description: Brain updated with latest project scan\n- Reason: treec --update-brain\n- Risk: None\n- Status: Complete\n",
+        "\n## Change — {}\n- File: .brain/perception/tree.md, .brain/memory/long_term.md\n- Description: Brain updated with latest project scan\n- Reason: treec --update-brain\n- Risk: None\n- Status: Complete\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M"),
     );
-    let changelog_path = brain_dir.join("changelog.md");
-    if let Ok(mut existing) = std::fs::read_to_string(&changelog_path) {
-        existing.push_str(&changelog_entry);
-        if std::fs::write(&changelog_path, &existing).is_ok() {
-            println!("   📝 changelog.md updated");
-        }
+    if let Err(e) = brain::append_changelog(root, &changelog_entry) {
+        eprintln!("[TreeC] Warning: {}", e);
+    } else {
+        println!("   📝 memory/changelog.md updated");
+    }
+
+    if dry_run {
+        warn_token_estimate(md_content, &config.neural_model);
+        println!("\n🔍 Dry-run mode — skipping AI call.");
+        println!("   Local brain files were updated. AI regeneration skipped.");
+        return;
     }
 
     // AI refresh if key available
@@ -673,8 +720,23 @@ fn handle_status(root: &std::path::Path, config: &config::Config) {
     // .brain/
     let brain_dir = root.join(".brain");
     if brain_dir.exists() {
-        let ts = modified_time(&brain_dir.join("context.md"));
-        println!("   🧠 .brain/          ✅ exists  (last update: {})", ts);
+        // Detect brain version: new hierarchical (cortex/) vs old flat
+        let is_new_structure = brain_dir.join("cortex").exists();
+        let last_update_file = if is_new_structure {
+            brain_dir.join("cortex").join("context.md")
+        } else {
+            brain_dir.join("context.md")
+        };
+        let ts = modified_time(&last_update_file);
+        let structure_tag = if is_new_structure {
+            "hierarchical"
+        } else {
+            "flat — run 'treec --neural-link' to upgrade"
+        };
+        println!(
+            "   🧠 .brain/          ✅ exists  ({}) (last update: {})",
+            structure_tag, ts
+        );
     } else {
         println!("   🧠 .brain/          ❌ not found  →  run: treec --neural-link");
     }

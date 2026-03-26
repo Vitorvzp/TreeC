@@ -70,6 +70,311 @@ pub fn read_file_content(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
+// ─── Dependency Detection ────────────────────────────────────────
+
+/// A detected project dependency from any supported manifest.
+#[derive(Debug, Clone)]
+pub struct Dependency {
+    pub name: String,
+    pub version: String,
+    pub manifest: String,
+}
+
+/// Scan the project root for known dependency manifests and extract dependencies.
+///
+/// Supports:
+/// - `Cargo.toml` (Rust)
+/// - `package.json` (Node.js)
+/// - `requirements.txt` (Python)
+/// - `go.mod` (Go)
+/// - `*.csproj` (C# / .NET)
+pub fn detect_dependencies(root: &Path) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+
+    // Cargo.toml — Rust
+    let cargo = root.join("Cargo.toml");
+    if cargo.exists() {
+        if let Ok(content) = std::fs::read_to_string(&cargo) {
+            deps.extend(parse_cargo_toml(&content));
+        }
+    }
+
+    // package.json — Node.js
+    let package_json = root.join("package.json");
+    if package_json.exists() {
+        if let Ok(content) = std::fs::read_to_string(&package_json) {
+            deps.extend(parse_package_json(&content));
+        }
+    }
+
+    // requirements.txt — Python
+    let requirements = root.join("requirements.txt");
+    if requirements.exists() {
+        if let Ok(content) = std::fs::read_to_string(&requirements) {
+            deps.extend(parse_requirements_txt(&content));
+        }
+    }
+
+    // go.mod — Go
+    let go_mod = root.join("go.mod");
+    if go_mod.exists() {
+        if let Ok(content) = std::fs::read_to_string(&go_mod) {
+            deps.extend(parse_go_mod(&content));
+        }
+    }
+
+    // *.csproj — C# / .NET (search in root dir)
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "csproj").unwrap_or(false) {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    deps.extend(parse_csproj(&content));
+                }
+            }
+        }
+    }
+
+    deps
+}
+
+/// Format detected dependencies as a Markdown document for perception/dependencies.md.
+pub fn format_dependencies_md(deps: &[Dependency], project_name: &str) -> String {
+    if deps.is_empty() {
+        return format!(
+            "# 📦 Dependencies — {}\n\n> No dependency manifests detected.\n",
+            project_name
+        );
+    }
+
+    // Group by manifest
+    let mut by_manifest: HashMap<&str, Vec<&Dependency>> = HashMap::new();
+    for dep in deps {
+        by_manifest
+            .entry(dep.manifest.as_str())
+            .or_default()
+            .push(dep);
+    }
+
+    let mut md = format!(
+        "# 📦 Dependencies — {}\n\n> Auto-detected by TreeC v{}\n> Updated: {}\n\n",
+        project_name,
+        env!("CARGO_PKG_VERSION"),
+        chrono::Local::now().format("%Y-%m-%d %H:%M")
+    );
+
+    // Sort manifests for deterministic output
+    let mut manifests: Vec<&str> = by_manifest.keys().copied().collect();
+    manifests.sort();
+
+    for manifest in manifests {
+        let manifest_deps = &by_manifest[manifest];
+        md.push_str(&format!(
+            "## {} ({} dependencies)\n\n",
+            manifest,
+            manifest_deps.len()
+        ));
+        md.push_str("| Package | Version |\n|---|---|\n");
+        for dep in manifest_deps.iter() {
+            md.push_str(&format!("| `{}` | `{}` |\n", dep.name, dep.version));
+        }
+        md.push('\n');
+    }
+
+    md
+}
+
+// ─── Manifest Parsers ────────────────────────────────────────────
+
+fn parse_cargo_toml(content: &str) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+    let mut in_deps = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Detect [dependencies] / [dev-dependencies] / [build-dependencies] sections
+        if trimmed == "[dependencies]"
+            || trimmed == "[dev-dependencies]"
+            || trimmed == "[build-dependencies]"
+        {
+            in_deps = true;
+            continue;
+        }
+
+        // Stop at next section
+        if trimmed.starts_with('[') && in_deps {
+            in_deps = false;
+        }
+
+        if !in_deps || trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Parse: name = "version" or name = { version = "x", ... }
+        if let Some((name, rest)) = trimmed.split_once('=') {
+            let name = name.trim().to_string();
+            let rest = rest.trim();
+            let version = extract_version_from_toml_value(rest);
+            deps.push(Dependency {
+                name,
+                version,
+                manifest: "Cargo.toml".to_string(),
+            });
+        }
+    }
+
+    deps
+}
+
+fn extract_version_from_toml_value(value: &str) -> String {
+    // Simple string: "1.0"
+    if value.starts_with('"') {
+        return value.trim_matches('"').to_string();
+    }
+    // Inline table: { version = "1.0", ... }
+    if value.contains("version") {
+        if let Some(start) = value.find("version") {
+            let after = &value[start + 7..];
+            if let Some(eq) = after.find('=') {
+                let v = after[eq + 1..].trim();
+                let v = v.trim_start_matches('"');
+                if let Some(end) = v.find('"') {
+                    return v[..end].to_string();
+                }
+            }
+        }
+    }
+    "*".to_string()
+}
+
+fn parse_package_json(content: &str) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(content) else {
+        return deps;
+    };
+
+    for section in &["dependencies", "devDependencies", "peerDependencies"] {
+        if let Some(obj) = val[section].as_object() {
+            for (name, version) in obj {
+                deps.push(Dependency {
+                    name: name.clone(),
+                    version: version.as_str().unwrap_or("*").to_string(),
+                    manifest: "package.json".to_string(),
+                });
+            }
+        }
+    }
+
+    deps
+}
+
+fn parse_requirements_txt(content: &str) -> Vec<Dependency> {
+    content
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') || line.starts_with('-') {
+                return None;
+            }
+            // pkg==1.0 / pkg>=1.0 / pkg~=1.0 / pkg
+            let (name, version) = if let Some(idx) = line.find(['=', '>', '<', '~']) {
+                let name = line[..idx]
+                    .trim_end_matches(['=', '>', '<', '~'])
+                    .to_string();
+                let version = line[idx..]
+                    .trim_start_matches(['=', '>', '<', '~'])
+                    .to_string();
+                (name, version)
+            } else {
+                (line.to_string(), "*".to_string())
+            };
+            Some(Dependency {
+                name,
+                version,
+                manifest: "requirements.txt".to_string(),
+            })
+        })
+        .collect()
+}
+
+fn parse_go_mod(content: &str) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+    let mut in_require = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == "require (" {
+            in_require = true;
+            continue;
+        }
+        if trimmed == ")" && in_require {
+            in_require = false;
+            continue;
+        }
+        // Single-line: require github.com/foo/bar v1.0.0
+        if trimmed.starts_with("require ") && !trimmed.ends_with('(') {
+            let parts: Vec<&str> = trimmed[8..].split_whitespace().collect();
+            if parts.len() >= 2 {
+                deps.push(Dependency {
+                    name: parts[0].to_string(),
+                    version: parts[1].to_string(),
+                    manifest: "go.mod".to_string(),
+                });
+            }
+            continue;
+        }
+
+        if in_require && !trimmed.is_empty() {
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 && !parts[0].starts_with("//") {
+                deps.push(Dependency {
+                    name: parts[0].to_string(),
+                    version: parts[1].to_string(),
+                    manifest: "go.mod".to_string(),
+                });
+            }
+        }
+    }
+
+    deps
+}
+
+fn parse_csproj(content: &str) -> Vec<Dependency> {
+    let mut deps = Vec::new();
+
+    // Simple line-by-line search for <PackageReference Include="..." Version="..." />
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if !trimmed.contains("PackageReference") {
+            continue;
+        }
+
+        let name = extract_xml_attr(trimmed, "Include").unwrap_or_default();
+        let version = extract_xml_attr(trimmed, "Version").unwrap_or_else(|| "*".to_string());
+
+        if !name.is_empty() {
+            deps.push(Dependency {
+                name,
+                version,
+                manifest: "*.csproj".to_string(),
+            });
+        }
+    }
+
+    deps
+}
+
+fn extract_xml_attr(line: &str, attr: &str) -> Option<String> {
+    let needle = format!("{}=\"", attr);
+    let start = line.find(&needle)?;
+    let after = &line[start + needle.len()..];
+    let end = after.find('"')?;
+    Some(after[..end].to_string())
+}
+
 // ─── Binary Detection ────────────────────────────────────────────
 
 /// Determine if a byte slice represents binary content.

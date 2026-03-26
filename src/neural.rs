@@ -30,18 +30,30 @@ struct GeminiResponsePart {
 /// JSON schema the AI returns — all fields are optional for selective generation.
 #[derive(Deserialize, Debug, Default)]
 pub struct BrainOutput {
+    // cortex/
     pub context: Option<String>,
     pub architecture: Option<String>,
-    pub readme: Option<String>,
-    pub roadmap: Option<String>,
     pub decisions: Option<String>,
-    pub tasks: Option<String>,
+    pub roadmap: Option<String>,
+    pub patterns: Option<String>,
+    pub releases: Option<String>,
+    // cortex/knowledge/
     pub modules: Option<String>,
     pub functions: Option<String>,
     pub api: Option<String>,
     pub database: Option<String>,
     pub models: Option<String>,
     pub services: Option<String>,
+    // language/
+    pub readme: Option<String>,
+    pub documentation: Option<String>,
+    // motor/
+    pub tasks: Option<String>,
+    pub backlog: Option<String>,
+    pub bugs: Option<String>,
+    // identity/
+    pub project: Option<String>,
+    pub goals: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -403,32 +415,46 @@ fn write_brain_output(
     let all_files: Vec<(&str, &Option<String>)> = vec![
         ("context", &output.context),
         ("architecture", &output.architecture),
-        ("readme", &output.readme),
-        ("roadmap", &output.roadmap),
         ("decisions", &output.decisions),
-        ("tasks", &output.tasks),
+        ("roadmap", &output.roadmap),
+        ("patterns", &output.patterns),
+        ("releases", &output.releases),
         ("modules", &output.modules),
         ("functions", &output.functions),
         ("api", &output.api),
         ("database", &output.database),
         ("models", &output.models),
         ("services", &output.services),
+        ("readme", &output.readme),
+        ("documentation", &output.documentation),
+        ("tasks", &output.tasks),
+        ("backlog", &output.backlog),
+        ("bugs", &output.bugs),
+        ("project", &output.project),
+        ("goals", &output.goals),
     ];
 
-    // Map key name → actual filename in .brain/
+    // Map key name → actual file path inside .brain/
     let filename_map: std::collections::HashMap<&str, &str> = [
-        ("context", "context.md"),
-        ("architecture", "architecture.md"),
-        ("readme", "readme.md"),
-        ("roadmap", "roadmap.md"),
-        ("decisions", "decisions.md"),
-        ("tasks", "tasks.md"),
-        ("modules", "knowledge/modules.md"),
-        ("functions", "knowledge/functions.md"),
-        ("api", "knowledge/api.md"),
-        ("database", "knowledge/database.md"),
-        ("models", "knowledge/models.md"),
-        ("services", "knowledge/services.md"),
+        ("context", "cortex/context.md"),
+        ("architecture", "cortex/architecture.md"),
+        ("decisions", "cortex/decisions.md"),
+        ("roadmap", "cortex/roadmap.md"),
+        ("patterns", "cortex/patterns.md"),
+        ("releases", "cortex/releases.md"),
+        ("modules", "cortex/knowledge/modules.md"),
+        ("functions", "cortex/knowledge/functions.md"),
+        ("api", "cortex/knowledge/api.md"),
+        ("database", "cortex/knowledge/database.md"),
+        ("models", "cortex/knowledge/models.md"),
+        ("services", "cortex/knowledge/services.md"),
+        ("readme", "language/readme.md"),
+        ("documentation", "language/documentation.md"),
+        ("tasks", "motor/tasks.md"),
+        ("backlog", "motor/backlog.md"),
+        ("bugs", "motor/bugs.md"),
+        ("project", "identity/project.md"),
+        ("goals", "identity/goals.md"),
     ]
     .into_iter()
     .collect();
@@ -457,36 +483,45 @@ fn write_brain_output(
 // System Prompts
 // ═══════════════════════════════════════════════════════════════════
 
-/// Full system prompt requesting all 12 brain files.
+/// Full system prompt requesting all brain files.
 fn build_system_prompt_full() -> String {
     r##"You are TreeC Neural Link — an AI that analyzes project structures and generates structured documentation.
 
-Given a project's Tree.md (containing file tree, metadata, and source code), you must generate a JSON object with the following keys. Each value should be a complete Markdown document.
+Given a project's Tree.md (containing file tree, metadata, and source code), generate a JSON object where each value is a complete Markdown document.
+
+The brain uses a hierarchical structure. Use [[wikilinks]] with the correct path prefix when referencing other files.
 
 Return ONLY a valid JSON object with these keys:
 
 {
-  "context": "# Context\n\n(Full project overview: purpose, tech stack, architecture summary, main modules, how the system works, important files, entry points, risks, TODOs, improvement ideas)",
-  "architecture": "# Architecture\n\n(System architecture: modules, data flow, APIs, database, services, dependencies, design patterns. Include Mermaid diagrams where helpful)",
-  "readme": "# Project Name\n\n(Professional README with: description, features, installation, usage, configuration, contributing guidelines)",
-  "roadmap": "# Roadmap\n\n(Suggested features and improvements with Priority/Difficulty/Impact for each)",
-  "decisions": "# Technical Decisions\n\n(Document key technical decisions found in the codebase: what was chosen, why, alternatives, impact)",
-  "tasks": "# Tasks\n\n(Identify pending tasks, improvements, and technical debt from the codebase)",
+  "context": "# Context\n\n(Full project overview: purpose, tech stack, architecture summary, main modules, how it works, important files, entry points, risks, TODOs, improvement ideas. Link to [[cortex/architecture]], [[motor/tasks]])",
+  "architecture": "# Architecture\n\n(System architecture: modules, data flow, APIs, database, services, dependencies, design patterns. Include Mermaid diagrams where helpful. Link to [[cortex/context]], [[cortex/decisions]])",
+  "decisions": "# Technical Decisions\n\n(Document key technical decisions: what was chosen, why, alternatives, impact. Format: ## Decision — YYYY-MM-DD)",
+  "roadmap": "# Roadmap\n\n(Suggested features and improvements. Each with Priority/Difficulty/Impact. Link to [[motor/backlog]], [[motor/tasks]])",
+  "patterns": "# Design Patterns\n\n(Architectural and design patterns found in the codebase: what patterns, where used, why)",
+  "releases": "# Releases\n\n(Version history and planned releases extracted from the codebase. Format: ## vX.Y.Z — Description)",
   "modules": "# Modules\n\n(Document each module/file: purpose, public API, dependencies, key functions)",
-  "functions": "# Functions\n\n(Document key functions: signature, purpose, parameters, return values)",
+  "functions": "# Functions\n\n(Document key functions: signature, purpose, parameters, return values, examples)",
   "api": "# API\n\n(Document any API endpoints, routes, request/response formats found in the code)",
   "database": "# Database\n\n(Document database schema, models, migrations, queries found in the code)",
   "models": "# Models\n\n(Document data models, structs, types, interfaces found in the code)",
-  "services": "# Services\n\n(Document services, external integrations, background jobs found in the code)"
+  "services": "# Services\n\n(Document services, external integrations, background jobs found in the code)",
+  "readme": "# Project Name\n\n(Professional README with: description, features, installation, usage, configuration, contributing guidelines)",
+  "documentation": "# Documentation\n\n(Full user-facing documentation: guides, how-tos, configuration reference)",
+  "tasks": "# Tasks\n\n(Active tasks and technical debt identified from the codebase. Format: - [ ] Task description)",
+  "backlog": "# Backlog\n\n(Future improvements, nice-to-haves, and long-term goals identified from the code)",
+  "bugs": "# Bugs\n\n(Known bugs, edge cases, and fragile areas identified in the codebase)",
+  "project": "# Project Identity\n\n(What this project is, its mission, target audience, and unique value proposition)",
+  "goals": "# Goals\n\n(Project goals, success criteria, and north star metrics)"
 }
 
 Rules:
 - Write in the same language as the project's README or comments
 - Be thorough and detailed
-- Use Obsidian-compatible Markdown with [[wikilinks]] between brain files
-- If a section has no relevant content, put "No relevant content found for this project."
+- Use Obsidian-compatible [[wikilinks]] with full path (e.g. [[cortex/context]], [[motor/tasks]])
+- If a section has no relevant content, write "No relevant content found for this project."
 - Use code examples from the actual source code when documenting
-- Return ONLY the JSON object, no extra text"##.to_string()
+- Return ONLY the JSON object, no extra text, no markdown fences"##.to_string()
 }
 
 /// Selective system prompt — only requests the specified brain files.
@@ -514,9 +549,9 @@ Given a project's Tree.md, generate ONLY the following JSON keys (selective upda
 Rules:
 - Write in the same language as the project's README or comments
 - Be thorough and detailed for each requested section
-- Use Obsidian-compatible Markdown with [[wikilinks]] between brain files
+- Use Obsidian-compatible Markdown with [[wikilinks]] using full paths (e.g. [[cortex/context]], [[motor/tasks]])
 - Use code examples from the actual source when documenting
-- Return ONLY the JSON object with the requested keys, no extra text"#,
+- Return ONLY the JSON object with the requested keys, no extra text, no markdown fences"#,
         keys_json.join(",\n")
     )
 }
