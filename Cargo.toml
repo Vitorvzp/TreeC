@@ -25,6 +25,9 @@ ureq = { version = "2.9", features = ["json"] }     # HTTP client for AI API
 indicatif = "0.17"                                   # Progress bars and spinners
 keyring = "3.6.3"
 content_inspector = "0.2.4"
+ratatui = "0.28"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tui-textarea = { version = "0.7", features = ["crossterm"] }
 
 [dev-dependencies]
 tempfile = "3"
