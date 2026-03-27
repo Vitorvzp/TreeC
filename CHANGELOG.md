@@ -5,6 +5,21 @@ Format: `## [x.y.z] — Title`
 
 ---
 
+## [1.0.0] — 2026-03-26
+
+### Added
+- Multi-agent Neural Brain system (orchestrator, agents, shared_memory directories)
+- 5 default specialized agents: architect, backend, tests, docs, frontend
+- `treec agent` CLI subcommands: scaffold, write, activate, list, status
+- `treec orchestrator` CLI subcommands: read, write, status
+- TUI (Terminal User Interface) with 6 screens via ratatui
+- Agent creation wizard (5-step: Name → Role → Specialties → Prompt → Confirm)
+- Agent JSON metadata saved to `.brain/agents/_pending/`
+- Claude Code skill `treec-agents` for intelligent agent creation and orchestration
+- Dependency detection and `--dry-run` mode (from v0.6.0 integration)
+
+---
+
 ## [0.6.0] — Neural Brain Hierárquico, Análise de Dependências e Dry-run
 
 ### Breaking Changes
