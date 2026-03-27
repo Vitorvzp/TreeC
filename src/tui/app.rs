@@ -1,6 +1,10 @@
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::{io::Stdout, path::{Path, PathBuf}, time::Duration};
+use std::{
+    io::Stdout,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use super::{screens, wizard};
 
@@ -88,8 +92,12 @@ impl App {
         self.navigate_to(nav[self.nav_index].clone());
     }
 
-    pub fn scroll_down(&mut self) { self.scroll = self.scroll.saturating_add(3); }
-    pub fn scroll_up(&mut self) { self.scroll = self.scroll.saturating_sub(3); }
+    pub fn scroll_down(&mut self) {
+        self.scroll = self.scroll.saturating_add(3);
+    }
+    pub fn scroll_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(3);
+    }
 
     #[allow(dead_code)]
     pub fn read_brain_file(&mut self, relative_path: &str) {
@@ -109,14 +117,15 @@ pub fn run_app(
     let mut app = App::new(root);
 
     loop {
-        terminal.draw(|frame| screens::render(frame, &app))
+        terminal
+            .draw(|frame| screens::render(frame, &app))
             .map_err(|e| format!("Draw error: {}", e))?;
 
         if event::poll(Duration::from_millis(200))
             .map_err(|e| format!("Event poll error: {}", e))?
         {
-            if let Event::Key(key) = event::read()
-                .map_err(|e| format!("Event read error: {}", e))?
+            if let Event::Key(key) =
+                event::read().map_err(|e| format!("Event read error: {}", e))?
             {
                 handle_key(&mut app, key.code, key.modifiers);
             }
@@ -146,12 +155,30 @@ fn handle_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
             app.navigate_to(Screen::CreateAgent);
             app.wizard_state = wizard::WizardState::new();
         }
-        KeyCode::Char('1') => { app.nav_index = 0; app.navigate_to(Screen::Dashboard); }
-        KeyCode::Char('2') => { app.nav_index = 1; app.navigate_to(Screen::Agents); }
-        KeyCode::Char('3') => { app.nav_index = 2; app.navigate_to(Screen::Tasks); }
-        KeyCode::Char('4') => { app.nav_index = 3; app.navigate_to(Screen::BrainViewer); }
-        KeyCode::Char('5') => { app.nav_index = 4; app.navigate_to(Screen::SharedMemory); }
-        KeyCode::Char('6') => { app.nav_index = 5; app.navigate_to(Screen::Changelog); }
+        KeyCode::Char('1') => {
+            app.nav_index = 0;
+            app.navigate_to(Screen::Dashboard);
+        }
+        KeyCode::Char('2') => {
+            app.nav_index = 1;
+            app.navigate_to(Screen::Agents);
+        }
+        KeyCode::Char('3') => {
+            app.nav_index = 2;
+            app.navigate_to(Screen::Tasks);
+        }
+        KeyCode::Char('4') => {
+            app.nav_index = 3;
+            app.navigate_to(Screen::BrainViewer);
+        }
+        KeyCode::Char('5') => {
+            app.nav_index = 4;
+            app.navigate_to(Screen::SharedMemory);
+        }
+        KeyCode::Char('6') => {
+            app.nav_index = 5;
+            app.navigate_to(Screen::Changelog);
+        }
         _ => {}
     }
 }

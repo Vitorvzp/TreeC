@@ -991,17 +991,24 @@ fn handle_agent_cmd(root: &std::path::Path, cmd: AgentCmd) {
     match cmd {
         AgentCmd::Scaffold { name, role } => {
             agent::cmd_scaffold(root, &name, &role).unwrap_or_else(|e| {
-                eprintln!("[TreeC] {}", e); std::process::exit(1);
+                eprintln!("[TreeC] {}", e);
+                std::process::exit(1);
             });
         }
-        AgentCmd::Write { name, file, content } => {
+        AgentCmd::Write {
+            name,
+            file,
+            content,
+        } => {
             agent::cmd_write(root, &name, &file, &content).unwrap_or_else(|e| {
-                eprintln!("[TreeC] {}", e); std::process::exit(1);
+                eprintln!("[TreeC] {}", e);
+                std::process::exit(1);
             });
         }
         AgentCmd::Activate { name } => {
             agent::cmd_activate(root, &name).unwrap_or_else(|e| {
-                eprintln!("[TreeC] {}", e); std::process::exit(1);
+                eprintln!("[TreeC] {}", e);
+                std::process::exit(1);
             });
         }
         AgentCmd::List { pending } => {
@@ -1019,13 +1026,20 @@ fn handle_orchestrator_cmd(root: &std::path::Path, cmd: OrchestratorCmd) {
             let path = root.join(".brain").join("orchestrator").join("tasks.md");
             match std::fs::read_to_string(&path) {
                 Ok(content) => println!("{}", content),
-                Err(_) => eprintln!("[TreeC] orchestrator/tasks.md not found. Run 'treec --neural-link' first."),
+                Err(_) => eprintln!(
+                    "[TreeC] orchestrator/tasks.md not found. Run 'treec --neural-link' first."
+                ),
             }
         }
         OrchestratorCmd::Write { file, content } => {
-            let filename = if file.ends_with(".md") { file.clone() } else { format!("{}.md", file) };
+            let filename = if file.ends_with(".md") {
+                file.clone()
+            } else {
+                format!("{}.md", file)
+            };
             brain::write_orchestrator_file(root, &filename, &content).unwrap_or_else(|e| {
-                eprintln!("[TreeC] {}", e); std::process::exit(1);
+                eprintln!("[TreeC] {}", e);
+                std::process::exit(1);
             });
             println!("✅ Written orchestrator/{}", filename);
         }

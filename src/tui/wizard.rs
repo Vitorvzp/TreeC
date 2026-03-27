@@ -1,15 +1,15 @@
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    Frame,
 };
 use tui_textarea::TextArea;
 
-use crate::agent::AgentMeta;
 use super::app::App;
+use crate::agent::AgentMeta;
 
 /// Wizard step
 #[derive(Debug, Clone, PartialEq)]
@@ -173,26 +173,24 @@ pub fn handle_wizard_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
             _ => {}
         },
 
-        WizardStep::Prompt => {
-            match key {
-                KeyCode::Esc => {
-                    app.wizard_state.step = WizardStep::Specialties;
-                }
-                KeyCode::Enter if modifiers.contains(KeyModifiers::CONTROL) => {
-                    app.wizard_state.step = WizardStep::Confirm;
-                }
-                _ => {
-                    use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
-                    let ke = KeyEvent {
-                        code: key,
-                        modifiers,
-                        kind: KeyEventKind::Press,
-                        state: KeyEventState::NONE,
-                    };
-                    app.wizard_state.prompt_textarea.input(ke);
-                }
+        WizardStep::Prompt => match key {
+            KeyCode::Esc => {
+                app.wizard_state.step = WizardStep::Specialties;
             }
-        }
+            KeyCode::Enter if modifiers.contains(KeyModifiers::CONTROL) => {
+                app.wizard_state.step = WizardStep::Confirm;
+            }
+            _ => {
+                use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
+                let ke = KeyEvent {
+                    code: key,
+                    modifiers,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                };
+                app.wizard_state.prompt_textarea.input(ke);
+            }
+        },
 
         WizardStep::Confirm => match key {
             KeyCode::Esc => {
@@ -387,10 +385,7 @@ fn render_step_prompt(frame: &mut Frame, area: Rect, w: &WizardState) {
         Line::from(""),
     ]);
 
-    let header_area = Rect {
-        height: 4,
-        ..area
-    };
+    let header_area = Rect { height: 4, ..area };
     let textarea_area = Rect {
         y: area.y + 4,
         height: area.height.saturating_sub(4),
@@ -433,9 +428,7 @@ fn step_hint(step: &WizardStep) -> &'static str {
     match step {
         WizardStep::Name => "Type agent name  Enter: next  Esc: cancel",
         WizardStep::Role => "up/down: select  Enter: confirm  Esc: back",
-        WizardStep::Specialties => {
-            "Type specialties separated by commas  Enter: next  Esc: back"
-        }
+        WizardStep::Specialties => "Type specialties separated by commas  Enter: next  Esc: back",
         WizardStep::Prompt => "Type base prompt  Ctrl+Enter: next  Esc: back",
         WizardStep::Confirm => "Enter/Y: save to _pending/  N: cancel  Esc: back",
     }

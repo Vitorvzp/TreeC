@@ -44,7 +44,10 @@ fn validate_agent_name(name: &str) -> Result<(), String> {
         return Err("Agent name cannot be empty.".to_string());
     }
     if name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err(format!("Invalid agent name '{}': path separators are not allowed.", name));
+        return Err(format!(
+            "Invalid agent name '{}': path separators are not allowed.",
+            name
+        ));
     }
     Ok(())
 }
@@ -88,8 +91,8 @@ pub fn cmd_activate(root: &Path, name: &str) -> Result<(), String> {
     let role = if json_path.exists() {
         let raw = std::fs::read_to_string(&json_path)
             .map_err(|e| format!("Cannot read pending JSON: {}", e))?;
-        let meta: AgentMeta = serde_json::from_str(&raw)
-            .map_err(|e| format!("Invalid JSON: {}", e))?;
+        let meta: AgentMeta =
+            serde_json::from_str(&raw).map_err(|e| format!("Invalid JSON: {}", e))?;
         meta.role
     } else {
         "Custom Agent".to_string()
@@ -114,7 +117,11 @@ pub fn cmd_list(root: &Path, pending: bool) {
     } else {
         // Also list named agent dirs (default agents)
         let named = list_named_agents(root);
-        println!("🤖 Active agents ({} scaffolded, {} activated):", named.len(), agents.len());
+        println!(
+            "🤖 Active agents ({} scaffolded, {} activated):",
+            named.len(),
+            agents.len()
+        );
         for a in &named {
             println!("  • {} (scaffolded)", a);
         }
@@ -178,7 +185,8 @@ pub fn cmd_status(root: &Path, name: &str) {
     let identity = agent_dir.join("identity.md");
     if identity.exists() {
         if let Ok(content) = std::fs::read_to_string(&identity) {
-            let role_line = content.lines()
+            let role_line = content
+                .lines()
                 .find(|l| l.starts_with("**Role:**"))
                 .unwrap_or("**Role:** Unknown");
             println!("   {}", role_line);
@@ -221,9 +229,8 @@ mod tests {
         let (_d, root) = temp_root();
         cmd_scaffold(&root, "backend", "Backend Developer").unwrap();
         cmd_write(&root, "backend", "identity", "# Custom").unwrap();
-        let content = std::fs::read_to_string(
-            root.join(".brain/agents/backend/identity.md")
-        ).unwrap();
+        let content =
+            std::fs::read_to_string(root.join(".brain/agents/backend/identity.md")).unwrap();
         assert_eq!(content, "# Custom");
     }
 

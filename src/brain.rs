@@ -276,7 +276,12 @@ pub fn scaffold_agent_dir(root: &Path, name: &str, role: &str) -> Result<(), Str
 /// Write content to a specific file inside an agent's brain.
 /// Creates parent dirs if needed. Overwrites existing content.
 #[allow(dead_code)]
-pub fn write_agent_file(root: &Path, agent_name: &str, filename: &str, content: &str) -> Result<(), String> {
+pub fn write_agent_file(
+    root: &Path,
+    agent_name: &str,
+    filename: &str,
+    content: &str,
+) -> Result<(), String> {
     let path = root
         .join(".brain")
         .join("agents")
@@ -284,8 +289,7 @@ pub fn write_agent_file(root: &Path, agent_name: &str, filename: &str, content: 
         .join(filename);
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create dirs: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create dirs: {}", e))?;
     }
 
     fs::write(&path, content)
@@ -308,8 +312,7 @@ pub fn save_pending_agent(root: &Path, name: &str, json: &str) -> Result<(), Str
         .join("agents")
         .join("_pending")
         .join(format!("{}.json", name));
-    fs::write(&path, json)
-        .map_err(|e| format!("Failed to save pending agent '{}': {}", name, e))
+    fs::write(&path, json).map_err(|e| format!("Failed to save pending agent '{}': {}", name, e))
 }
 
 /// Save a pending agent prompt to agents/_pending/<name>.prompt.md
@@ -320,8 +323,7 @@ pub fn save_pending_prompt(root: &Path, name: &str, prompt: &str) -> Result<(), 
         .join("agents")
         .join("_pending")
         .join(format!("{}.prompt.md", name));
-    fs::write(&path, prompt)
-        .map_err(|e| format!("Failed to save pending prompt '{}': {}", name, e))
+    fs::write(&path, prompt).map_err(|e| format!("Failed to save pending prompt '{}': {}", name, e))
 }
 
 /// Move agent from _pending/ to _active/ (updates status in JSON).
@@ -338,8 +340,8 @@ pub fn activate_agent(root: &Path, name: &str) -> Result<(), String> {
     }
 
     // Update status field in JSON
-    let raw = fs::read_to_string(&json_src)
-        .map_err(|e| format!("Failed to read pending JSON: {}", e))?;
+    let raw =
+        fs::read_to_string(&json_src).map_err(|e| format!("Failed to read pending JSON: {}", e))?;
     let updated = raw
         .replace("\"status\": \"pending\"", "\"status\": \"active\"")
         .replace("\"status\":\"pending\"", "\"status\":\"active\"");
@@ -754,8 +756,12 @@ mod tests {
         let (_dir, root) = temp_dir();
         init_brain(&root).unwrap();
         for (name, _) in DEFAULT_AGENTS {
-            assert!(root.join(format!(".brain/agents/{}/identity.md", name)).exists(),
-                "Missing agent: {}", name);
+            assert!(
+                root.join(format!(".brain/agents/{}/identity.md", name))
+                    .exists(),
+                "Missing agent: {}",
+                name
+            );
         }
     }
 
@@ -791,7 +797,10 @@ mod tests {
         assert!(!root.join(".brain/agents/_pending/myagent.json").exists());
         // Verify status was actually updated
         let content = fs::read_to_string(root.join(".brain/agents/_active/myagent.json")).unwrap();
-        assert!(content.contains("\"active\""), "Status should be 'active' in the JSON");
+        assert!(
+            content.contains("\"active\""),
+            "Status should be 'active' in the JSON"
+        );
     }
 
     #[test]

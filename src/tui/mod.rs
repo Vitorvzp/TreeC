@@ -12,7 +12,8 @@ pub fn run_tui(root: &Path) -> Result<(), String> {
     result
 }
 
-fn setup_terminal() -> Result<ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>, String> {
+fn setup_terminal(
+) -> Result<ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>, String> {
     use crossterm::{execute, terminal::*};
     crossterm::terminal::enable_raw_mode()
         .map_err(|e| format!("Failed to enable raw mode: {}", e))?;
@@ -20,8 +21,7 @@ fn setup_terminal() -> Result<ratatui::Terminal<ratatui::backend::CrosstermBacke
     execute!(stdout, EnterAlternateScreen)
         .map_err(|e| format!("Failed to enter alternate screen: {}", e))?;
     let backend = ratatui::backend::CrosstermBackend::new(stdout);
-    ratatui::Terminal::new(backend)
-        .map_err(|e| format!("Failed to create terminal: {}", e))
+    ratatui::Terminal::new(backend).map_err(|e| format!("Failed to create terminal: {}", e))
 }
 
 fn restore_terminal(
@@ -32,6 +32,7 @@ fn restore_terminal(
         .map_err(|e| format!("Failed to disable raw mode: {}", e))?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)
         .map_err(|e| format!("Failed to leave alternate screen: {}", e))?;
-    terminal.show_cursor()
+    terminal
+        .show_cursor()
         .map_err(|e| format!("Failed to show cursor: {}", e))
 }
