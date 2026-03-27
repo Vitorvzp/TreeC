@@ -38,9 +38,21 @@ impl AgentMeta {
     }
 }
 
+/// Validate agent name: must be non-empty, no path separators, no dots, lowercase-ish
+fn validate_agent_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Agent name cannot be empty.".to_string());
+    }
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return Err(format!("Invalid agent name '{}': path separators are not allowed.", name));
+    }
+    Ok(())
+}
+
 /// Handle: treec agent scaffold <name>
 /// Creates agent directory + seed files. Does NOT require JSON to exist.
 pub fn cmd_scaffold(root: &Path, name: &str, role: &str) -> Result<(), String> {
+    validate_agent_name(name)?;
     crate::brain::scaffold_agent_dir(root, name, role)?;
     println!("✅ Agent '{}' scaffolded at .brain/agents/{}/", name, name);
     Ok(())
@@ -49,6 +61,7 @@ pub fn cmd_scaffold(root: &Path, name: &str, role: &str) -> Result<(), String> {
 /// Handle: treec agent write <name> <file> --content <text>
 /// Writes content to a specific file in the agent's brain.
 pub fn cmd_write(root: &Path, name: &str, file: &str, content: &str) -> Result<(), String> {
+    validate_agent_name(name)?;
     // Normalize filename: add .md if missing
     let filename = if file.ends_with(".md") {
         file.to_string()
@@ -64,6 +77,7 @@ pub fn cmd_write(root: &Path, name: &str, file: &str, content: &str) -> Result<(
 /// Handle: treec agent activate <name>
 /// Moves agent from _pending/ to _active/ and scaffolds its brain dir.
 pub fn cmd_activate(root: &Path, name: &str) -> Result<(), String> {
+    validate_agent_name(name)?;
     // Read pending JSON to get role
     let json_path = root
         .join(".brain")
@@ -148,6 +162,10 @@ fn list_named_agents(root: &Path) -> Vec<String> {
 
 /// Handle: treec agent status <name>
 pub fn cmd_status(root: &Path, name: &str) {
+    if let Err(e) = validate_agent_name(name) {
+        eprintln!("❌ {}", e);
+        return;
+    }
     let agent_dir = root.join(".brain").join("agents").join(name);
     if !agent_dir.exists() {
         eprintln!("❌ Agent '{}' not found in .brain/agents/", name);

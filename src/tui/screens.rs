@@ -41,9 +41,10 @@ fn render_title_bar(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled(format!(" {} ", s.label()), style)
     }).collect();
 
+    let title = format!(" TreeC v{} ", env!("CARGO_PKG_VERSION"));
     let title_bar = Paragraph::new(Line::from(titles))
         .block(Block::default()
-            .title(" TreeC v1.0.0 ")
+            .title(title.as_str())
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Green)));
 
