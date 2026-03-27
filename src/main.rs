@@ -1,9 +1,11 @@
+mod agent;
 mod analyzer;
 mod brain;
 mod config;
 mod generator;
 mod neural;
 mod scanner;
+mod tui;
 
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -82,11 +84,94 @@ struct Cli {
     /// Use with --neural-link or --update-brain
     #[arg(long = "dry-run")]
     dry_run: bool,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Commands {
+    /// 🖥️  Open the TUI dashboard
+    Tui,
+
+    /// 🤖 Manage specialized agents
+    Agent {
+        #[command(subcommand)]
+        cmd: AgentCmd,
+    },
+
+    /// 🎯 Orchestrator operations
+    Orchestrator {
+        #[command(subcommand)]
+        cmd: OrchestratorCmd,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum AgentCmd {
+    /// Create agent directory with seed files
+    Scaffold {
+        name: String,
+        #[arg(long, default_value = "Custom Agent")]
+        role: String,
+    },
+    /// Write content to a specific brain file of an agent
+    Write {
+        name: String,
+        file: String,
+        #[arg(long)]
+        content: String,
+    },
+    /// Activate a pending agent (moves from _pending/ to _active/ and scaffolds)
+    Activate { name: String },
+    /// List agents
+    List {
+        #[arg(long)]
+        pending: bool,
+    },
+    /// Show agent status
+    Status { name: String },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum OrchestratorCmd {
+    /// Read orchestrator/tasks.md
+    Read,
+    /// Write content to an orchestrator file
+    Write {
+        file: String,
+        #[arg(long)]
+        content: String,
+    },
+    /// Show orchestrator status
+    Status,
 }
 
 fn main() {
     let start = Instant::now();
     let cli = Cli::parse();
+
+    // ── Subcommands dispatch (agent, tui, orchestrator) ──
+    if let Some(cmd) = cli.command {
+        let root = std::path::Path::new(".");
+        match cmd {
+            Commands::Tui => {
+                tui::run_tui(root).unwrap_or_else(|e| {
+                    eprintln!("[TreeC] TUI error: {}", e);
+                    std::process::exit(1);
+                });
+                return;
+            }
+            Commands::Agent { cmd } => {
+                handle_agent_cmd(root, cmd);
+                return;
+            }
+            Commands::Orchestrator { cmd } => {
+                handle_orchestrator_cmd(root, cmd);
+                return;
+            }
+        }
+    }
 
     let root = std::fs::canonicalize(&cli.path).unwrap_or_else(|_| {
         eprintln!(
@@ -900,4 +985,68 @@ fn modified_time(path: &std::path::Path) -> String {
             dt.format("%Y-%m-%d %H:%M").to_string()
         })
         .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn handle_agent_cmd(root: &std::path::Path, cmd: AgentCmd) {
+    match cmd {
+        AgentCmd::Scaffold { name, role } => {
+            agent::cmd_scaffold(root, &name, &role).unwrap_or_else(|e| {
+                eprintln!("[TreeC] {}", e); std::process::exit(1);
+            });
+        }
+        AgentCmd::Write { name, file, content } => {
+            agent::cmd_write(root, &name, &file, &content).unwrap_or_else(|e| {
+                eprintln!("[TreeC] {}", e); std::process::exit(1);
+            });
+        }
+        AgentCmd::Activate { name } => {
+            agent::cmd_activate(root, &name).unwrap_or_else(|e| {
+                eprintln!("[TreeC] {}", e); std::process::exit(1);
+            });
+        }
+        AgentCmd::List { pending } => {
+            agent::cmd_list(root, pending);
+        }
+        AgentCmd::Status { name } => {
+            agent::cmd_status(root, &name);
+        }
+    }
+}
+
+fn handle_orchestrator_cmd(root: &std::path::Path, cmd: OrchestratorCmd) {
+    match cmd {
+        OrchestratorCmd::Read => {
+            let path = root.join(".brain").join("orchestrator").join("tasks.md");
+            match std::fs::read_to_string(&path) {
+                Ok(content) => println!("{}", content),
+                Err(_) => eprintln!("[TreeC] orchestrator/tasks.md not found. Run 'treec --neural-link' first."),
+            }
+        }
+        OrchestratorCmd::Write { file, content } => {
+            let filename = if file.ends_with(".md") { file.clone() } else { format!("{}.md", file) };
+            brain::write_orchestrator_file(root, &filename, &content).unwrap_or_else(|e| {
+                eprintln!("[TreeC] {}", e); std::process::exit(1);
+            });
+            println!("✅ Written orchestrator/{}", filename);
+        }
+        OrchestratorCmd::Status => {
+            let brain_dir = root.join(".brain");
+            if !brain_dir.join("orchestrator").exists() {
+                eprintln!("❌ Multi-agent brain not initialized. Run 'treec --neural-link'.");
+                return;
+            }
+            let agents = brain::list_agents(root, "_active");
+            let pending = brain::list_agents(root, "_pending");
+            println!("🎯 Orchestrator Status");
+            println!("   Active agents:  {}", agents.len());
+            println!("   Pending agents: {}", pending.len());
+            // Count tasks
+            let tasks_path = brain_dir.join("orchestrator/tasks.md");
+            if let Ok(content) = std::fs::read_to_string(&tasks_path) {
+                let open = content.lines().filter(|l| l.contains("- [ ]")).count();
+                let done = content.lines().filter(|l| l.contains("- [x]")).count();
+                println!("   Tasks: {} open, {} done", open, done);
+            }
+        }
+    }
 }
