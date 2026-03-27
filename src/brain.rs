@@ -340,7 +340,9 @@ pub fn activate_agent(root: &Path, name: &str) -> Result<(), String> {
     // Update status field in JSON
     let raw = fs::read_to_string(&json_src)
         .map_err(|e| format!("Failed to read pending JSON: {}", e))?;
-    let updated = raw.replace("\"status\": \"pending\"", "\"status\": \"active\"");
+    let updated = raw
+        .replace("\"status\": \"pending\"", "\"status\": \"active\"")
+        .replace("\"status\":\"pending\"", "\"status\":\"active\"");
 
     fs::write(active_dir.join(format!("{}.json", name)), &updated)
         .map_err(|e| format!("Failed to write active JSON: {}", e))?;
@@ -779,12 +781,17 @@ mod tests {
     fn test_save_and_activate_agent() {
         let (_dir, root) = temp_dir();
         init_brain(&root).unwrap();
-        save_pending_agent(&root, "myagent", r#"{"name":"myagent","status":"pending"}"#).unwrap();
+        // Use the same format serde_json::to_string_pretty produces
+        let json = "{\n  \"name\": \"myagent\",\n  \"status\": \"pending\"\n}";
+        save_pending_agent(&root, "myagent", json).unwrap();
         save_pending_prompt(&root, "myagent", "You are a specialist.").unwrap();
         assert!(root.join(".brain/agents/_pending/myagent.json").exists());
         activate_agent(&root, "myagent").unwrap();
         assert!(root.join(".brain/agents/_active/myagent.json").exists());
         assert!(!root.join(".brain/agents/_pending/myagent.json").exists());
+        // Verify status was actually updated
+        let content = fs::read_to_string(root.join(".brain/agents/_active/myagent.json")).unwrap();
+        assert!(content.contains("\"active\""), "Status should be 'active' in the JSON");
     }
 
     #[test]
