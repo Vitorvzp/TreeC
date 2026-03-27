@@ -73,6 +73,59 @@ const IDENTITY_FILES: &[&str] = &["identity/project.md", "identity/goals.md"];
 const SYSTEM_FILES: &[&str] = &["system/rules.md", "system/workflow.md"];
 
 // ═══════════════════════════════════════════════════════════════════
+// Multi-Agent Structure
+// ═══════════════════════════════════════════════════════════════════
+
+/// Multi-agent subdirectories
+const MULTI_AGENT_SUBDIRS: &[&str] = &[
+    "orchestrator",
+    "agents",
+    "agents/_pending",
+    "agents/_active",
+    "shared_memory",
+];
+
+/// Default agent roles seeded on first neural-link
+const DEFAULT_AGENTS: &[(&str, &str)] = &[
+    ("architect", "Architect"),
+    ("backend", "Backend Developer"),
+    ("tests", "QA / Test Engineer"),
+    ("docs", "Documentation Writer"),
+    ("frontend", "Frontend Developer"),
+];
+
+/// Files inside each agent brain
+const AGENT_BRAIN_FILES: &[&str] = &[
+    "identity.md",
+    "instructions.md",
+    "context.md",
+    "tasks.md",
+    "memory.md",
+    "decisions.md",
+    "knowledge.md",
+];
+
+/// Orchestrator brain files
+const ORCHESTRATOR_FILES: &[&str] = &[
+    "orchestrator/identity.md",
+    "orchestrator/goals.md",
+    "orchestrator/global_context.md",
+    "orchestrator/roadmap.md",
+    "orchestrator/tasks.md",
+    "orchestrator/agent_coordination.md",
+    "orchestrator/decisions.md",
+];
+
+/// Shared memory files
+const SHARED_MEMORY_FILES: &[&str] = &[
+    "shared_memory/architecture.md",
+    "shared_memory/decisions.md",
+    "shared_memory/changelog.md",
+    "shared_memory/lessons.md",
+    "shared_memory/knowledge.md",
+];
+
+// ═══════════════════════════════════════════════════════════════════
 // Public API
 // ═══════════════════════════════════════════════════════════════════
 
@@ -106,10 +159,13 @@ pub fn init_brain(root: &Path) -> Result<(), String> {
         let path = brain_dir.join(file);
         if !path.exists() {
             let content = seed_content(file);
-            fs::write(&path, &content)
+            fs::write(&path, content)
                 .map_err(|e| format!("Failed to create .brain/{}: {}", file, e))?;
         }
     }
+
+    // Initialize multi-agent extension
+    init_multi_agent_brain(root)?;
 
     Ok(())
 }
@@ -157,8 +213,173 @@ pub fn append_changelog(root: &Path, entry: &str) -> Result<(), String> {
     let path = root.join(".brain").join("memory").join("changelog.md");
     let mut existing = fs::read_to_string(&path).unwrap_or_default();
     existing.push_str(entry);
-    fs::write(&path, &existing)
+    fs::write(&path, existing)
         .map_err(|e| format!("Failed to update .brain/memory/changelog.md: {}", e))
+}
+
+/// Initialize the multi-agent extension of .brain/.
+/// Safe to call on a brain already initialized with init_brain().
+/// Creates orchestrator/, agents/*, shared_memory/ if not present.
+pub fn init_multi_agent_brain(root: &Path) -> Result<(), String> {
+    let brain_dir = root.join(".brain");
+
+    // Create multi-agent subdirs
+    for subdir in MULTI_AGENT_SUBDIRS {
+        let dir = brain_dir.join(subdir);
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create .brain/{}/: {}", subdir, e))?;
+    }
+
+    // Seed orchestrator files
+    for file in ORCHESTRATOR_FILES {
+        let path = brain_dir.join(file);
+        if !path.exists() {
+            fs::write(&path, seed_orchestrator(file))
+                .map_err(|e| format!("Failed to seed .brain/{}: {}", file, e))?;
+        }
+    }
+
+    // Seed shared_memory files
+    for file in SHARED_MEMORY_FILES {
+        let path = brain_dir.join(file);
+        if !path.exists() {
+            fs::write(&path, seed_shared_memory(file))
+                .map_err(|e| format!("Failed to seed .brain/{}: {}", file, e))?;
+        }
+    }
+
+    // Seed default agents
+    for (agent_name, agent_role) in DEFAULT_AGENTS {
+        scaffold_agent_dir(root, agent_name, agent_role)?;
+    }
+
+    Ok(())
+}
+
+/// Create the directory and seed files for a single agent.
+/// Safe to call if the agent already exists (skips existing files).
+pub fn scaffold_agent_dir(root: &Path, name: &str, role: &str) -> Result<(), String> {
+    let agent_dir = root.join(".brain").join("agents").join(name);
+    fs::create_dir_all(&agent_dir)
+        .map_err(|e| format!("Failed to create agent dir '{}': {}", name, e))?;
+
+    for file in AGENT_BRAIN_FILES {
+        let path = agent_dir.join(file);
+        if !path.exists() {
+            fs::write(&path, seed_agent_file(name, role, file))
+                .map_err(|e| format!("Failed to seed agent file {}/{}: {}", name, file, e))?;
+        }
+    }
+    Ok(())
+}
+
+/// Write content to a specific file inside an agent's brain.
+/// Creates parent dirs if needed. Overwrites existing content.
+#[allow(dead_code)]
+pub fn write_agent_file(root: &Path, agent_name: &str, filename: &str, content: &str) -> Result<(), String> {
+    let path = root
+        .join(".brain")
+        .join("agents")
+        .join(agent_name)
+        .join(filename);
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create dirs: {}", e))?;
+    }
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write {}/{}: {}", agent_name, filename, e))
+}
+
+/// Write content to a specific orchestrator file.
+#[allow(dead_code)]
+pub fn write_orchestrator_file(root: &Path, filename: &str, content: &str) -> Result<(), String> {
+    let path = root.join(".brain").join("orchestrator").join(filename);
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write orchestrator/{}: {}", filename, e))
+}
+
+/// Save a pending agent JSON to agents/_pending/<name>.json
+#[allow(dead_code)]
+pub fn save_pending_agent(root: &Path, name: &str, json: &str) -> Result<(), String> {
+    let path = root
+        .join(".brain")
+        .join("agents")
+        .join("_pending")
+        .join(format!("{}.json", name));
+    fs::write(&path, json)
+        .map_err(|e| format!("Failed to save pending agent '{}': {}", name, e))
+}
+
+/// Save a pending agent prompt to agents/_pending/<name>.prompt.md
+#[allow(dead_code)]
+pub fn save_pending_prompt(root: &Path, name: &str, prompt: &str) -> Result<(), String> {
+    let path = root
+        .join(".brain")
+        .join("agents")
+        .join("_pending")
+        .join(format!("{}.prompt.md", name));
+    fs::write(&path, prompt)
+        .map_err(|e| format!("Failed to save pending prompt '{}': {}", name, e))
+}
+
+/// Move agent from _pending/ to _active/ (updates status in JSON).
+#[allow(dead_code)]
+pub fn activate_agent(root: &Path, name: &str) -> Result<(), String> {
+    let pending_dir = root.join(".brain").join("agents").join("_pending");
+    let active_dir = root.join(".brain").join("agents").join("_active");
+
+    let json_src = pending_dir.join(format!("{}.json", name));
+    let prompt_src = pending_dir.join(format!("{}.prompt.md", name));
+
+    if !json_src.exists() {
+        return Err(format!("No pending agent named '{}'", name));
+    }
+
+    // Update status field in JSON
+    let raw = fs::read_to_string(&json_src)
+        .map_err(|e| format!("Failed to read pending JSON: {}", e))?;
+    let updated = raw.replace("\"status\": \"pending\"", "\"status\": \"active\"");
+
+    fs::write(active_dir.join(format!("{}.json", name)), &updated)
+        .map_err(|e| format!("Failed to write active JSON: {}", e))?;
+
+    if prompt_src.exists() {
+        fs::copy(&prompt_src, active_dir.join(format!("{}.prompt.md", name)))
+            .map_err(|e| format!("Failed to copy prompt: {}", e))?;
+        fs::remove_file(&prompt_src).ok();
+    }
+
+    fs::remove_file(&json_src).ok();
+    Ok(())
+}
+
+/// List all agents in a given state folder ("_pending" or "_active" or an agent name).
+#[allow(dead_code)]
+pub fn list_agents(root: &Path, subfolder: &str) -> Vec<String> {
+    let dir = root.join(".brain").join("agents").join(subfolder);
+    if !dir.exists() {
+        return vec![];
+    }
+    fs::read_dir(&dir)
+        .ok()
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if name.ends_with(".json") {
+                        Some(name.trim_end_matches(".json").to_string())
+                    } else if e.path().is_dir() {
+                        Some(name)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -337,6 +558,49 @@ fn seed_content(filename: &str) -> String {
     }
 }
 
+fn seed_orchestrator(filename: &str) -> String {
+    match filename {
+        "orchestrator/identity.md" => "# 🎯 Orchestrator — Identity\n\nVocê é o Orquestrador do sistema multi-agente TreeC.\nSua função: ler o estado do projeto, priorizar tarefas e delegar para os agentes especializados.\n\nLeia sempre:\n- [[orchestrator/global_context]]\n- [[orchestrator/roadmap]]\n- [[orchestrator/tasks]]\n- [[orchestrator/agent_coordination]]\n".to_string(),
+        "orchestrator/goals.md" => "# 🏆 Goals\n\n> Objetivos globais do projeto — atualizados pelo usuário ou pela skill.\n\n".to_string(),
+        "orchestrator/global_context.md" => "# 🌍 Global Context\n\n> Estado atual do projeto. Atualizado pelo Orchestrator após cada ciclo.\n\n".to_string(),
+        "orchestrator/roadmap.md" => "# 🗺️ Roadmap\n\n> Planejamento futuro gerenciado pelo Orchestrator.\n\n".to_string(),
+        "orchestrator/tasks.md" => "# ✅ Task Queue\n\n> Fila de tarefas global. O Orchestrator lê, prioriza e delega.\n\n## Formato\n```\n- [ ] [AGENT:backend] Descrição da tarefa | Prioridade: Alta\n```\n\n## Tasks\n\n".to_string(),
+        "orchestrator/agent_coordination.md" => "# 🤝 Agent Coordination\n\n> Status de cada agente e regras de delegação.\n\n## Agentes Ativos\n\n| Agente | Status | Última Tarefa |\n|---|---|---|\n\n".to_string(),
+        "orchestrator/decisions.md" => "# 🔀 High-Level Decisions\n\n> Decisões de alto nível tomadas pelo Orchestrator.\n\n".to_string(),
+        _ => format!("# {}\n\n> Orquestrador — auto-gerado pelo TreeC\n\n", filename),
+    }
+}
+
+fn seed_shared_memory(filename: &str) -> String {
+    match filename {
+        "shared_memory/architecture.md" => "# 🏗️ Shared Architecture\n\n> Arquitetura consolidada — todos os agentes leem e respeitam este documento.\n\n".to_string(),
+        "shared_memory/decisions.md" => "# 🔀 Architecture Decision Records (ADRs)\n\n> Decisões técnicas consolidadas de todos os agentes.\n\n## Formato\n```\n## ADR-001 — Título\n- Decisão: ...\n- Razão: ...\n- Impacto: ...\n```\n\n".to_string(),
+        "shared_memory/changelog.md" => format!("# 📋 Global Changelog\n\n## {}\n- Sistema multi-agente inicializado pelo TreeC\n", chrono::Local::now().format("%Y-%m-%d")),
+        "shared_memory/lessons.md" => "# 💡 Shared Lessons Learned\n\n> Lições aprendidas por qualquer agente — compartilhadas com todos.\n\n".to_string(),
+        "shared_memory/knowledge.md" => "# 📚 Shared Knowledge Base\n\n> Base de conhecimento técnico compartilhada por todos os agentes.\n\n".to_string(),
+        _ => format!("# {}\n\n> Memória compartilhada — auto-gerada pelo TreeC\n\n", filename),
+    }
+}
+
+fn seed_agent_file(agent_name: &str, role: &str, filename: &str) -> String {
+    match filename {
+        "identity.md" => format!(
+            "# 🤖 {name} — Identity\n\n**Role:** {role}\n\n> Identidade gerada como seed pelo TreeC.\n> A skill deve reescrever este arquivo com `treec agent write {name} identity --content \"...\"`\n\nAntes de agir, leia:\n- [[agents/{name}/instructions]]\n- [[agents/{name}/tasks]]\n- [[agents/{name}/memory]]\n- [[shared_memory/architecture]]\n",
+            name = agent_name, role = role
+        ),
+        "instructions.md" => format!(
+            "# 📏 {name} — Instructions\n\n> Regras de operação deste agente.\n> A skill deve preencher via `treec agent write {name} instructions --content \"...\"`\n\n",
+            name = agent_name
+        ),
+        "context.md" => format!("# 📄 {name} — Current Context\n\n> Contexto da tarefa em execução. Atualizado pelo agente a cada ciclo.\n\n", name = agent_name),
+        "tasks.md" => format!("# ✅ {name} — Task Queue\n\n> Tarefas delegadas pelo Orchestrator.\n\n## Formato\n```\n- [ ] Descrição da tarefa | Prioridade: Alta\n```\n\n## Pendentes\n\n", name = agent_name),
+        "memory.md" => format!("# 🧠 {name} — Memory\n\n> Memória de curto e longo prazo deste agente.\n\n## Entrada — {date}\n- Agente inicializado pelo TreeC\n", name = agent_name, date = chrono::Local::now().format("%Y-%m-%d")),
+        "decisions.md" => format!("# 🔀 {name} — Decisions\n\n> Decisões técnicas tomadas por este agente.\n\n", name = agent_name),
+        "knowledge.md" => format!("# 📚 {name} — Domain Knowledge\n\n> Conhecimento específico do domínio deste agente.\n> A skill deve preencher via `treec agent write {name} knowledge --content \"...\"`\n\n", name = agent_name),
+        _ => format!("# {} — {}\n\n> Auto-gerado pelo TreeC\n\n", agent_name, filename),
+    }
+}
+
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -462,3 +726,73 @@ Use [[motor/issues]] for blockers.
 You are the project's second brain.
 Your job: understand, maintain memory, document decisions, and safely improve the codebase.
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temp_dir() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        (dir, path)
+    }
+
+    #[test]
+    fn test_init_multi_agent_creates_orchestrator() {
+        let (_dir, root) = temp_dir();
+        init_brain(&root).unwrap();
+        assert!(root.join(".brain/orchestrator/tasks.md").exists());
+        assert!(root.join(".brain/orchestrator/identity.md").exists());
+        assert!(root.join(".brain/shared_memory/changelog.md").exists());
+    }
+
+    #[test]
+    fn test_default_agents_created() {
+        let (_dir, root) = temp_dir();
+        init_brain(&root).unwrap();
+        for (name, _) in DEFAULT_AGENTS {
+            assert!(root.join(format!(".brain/agents/{}/identity.md", name)).exists(),
+                "Missing agent: {}", name);
+        }
+    }
+
+    #[test]
+    fn test_scaffold_agent_dir() {
+        let (_dir, root) = temp_dir();
+        fs::create_dir_all(root.join(".brain/agents")).unwrap();
+        scaffold_agent_dir(&root, "security", "Security Engineer").unwrap();
+        assert!(root.join(".brain/agents/security/identity.md").exists());
+        assert!(root.join(".brain/agents/security/tasks.md").exists());
+    }
+
+    #[test]
+    fn test_write_agent_file() {
+        let (_dir, root) = temp_dir();
+        init_brain(&root).unwrap();
+        write_agent_file(&root, "backend", "identity.md", "# Custom Identity").unwrap();
+        let content = fs::read_to_string(root.join(".brain/agents/backend/identity.md")).unwrap();
+        assert_eq!(content, "# Custom Identity");
+    }
+
+    #[test]
+    fn test_save_and_activate_agent() {
+        let (_dir, root) = temp_dir();
+        init_brain(&root).unwrap();
+        save_pending_agent(&root, "myagent", r#"{"name":"myagent","status":"pending"}"#).unwrap();
+        save_pending_prompt(&root, "myagent", "You are a specialist.").unwrap();
+        assert!(root.join(".brain/agents/_pending/myagent.json").exists());
+        activate_agent(&root, "myagent").unwrap();
+        assert!(root.join(".brain/agents/_active/myagent.json").exists());
+        assert!(!root.join(".brain/agents/_pending/myagent.json").exists());
+    }
+
+    #[test]
+    fn test_list_agents() {
+        let (_dir, root) = temp_dir();
+        init_brain(&root).unwrap();
+        let active = list_agents(&root, "_active");
+        // No agents in _active yet (default agents go directly to named dirs)
+        assert!(active.is_empty());
+    }
+}
