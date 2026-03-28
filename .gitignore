@@ -37,3 +37,4 @@ roadmap.md
 .brain
 # TreeC — API key config (contains secrets)
 TreeC.toml
+docs
